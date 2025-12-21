@@ -445,6 +445,9 @@ pub fn deflate_stored(data: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use flate2::read::ZlibDecoder;
+    use rand::{Rng, SeedableRng};
+    use std::io::Read;
 
     #[test]
     fn test_length_code() {
@@ -525,5 +528,39 @@ mod tests {
         assert!(!should_use_stored(1000, 400));
         // Near-equal totals prefer stored
         assert!(should_use_stored(1000, 1010));
+    }
+
+    fn decompress_zlib(data: &[u8]) -> Vec<u8> {
+        let mut decoder = ZlibDecoder::new(data);
+        let mut out = Vec::new();
+        decoder.read_to_end(&mut out).expect("zlib decode");
+        out
+    }
+
+    #[test]
+    fn test_deflate_zlib_roundtrip_random_small() {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(999);
+        for len in [0usize, 1, 2, 5, 32, 128, 1024, 4096] {
+            let mut data = vec![0u8; len];
+            rng.fill(data.as_mut_slice());
+            let encoded = deflate_zlib(&data, 6);
+            let decoded = decompress_zlib(&encoded);
+            assert_eq!(decoded, data, "mismatch at len={}", len);
+        }
+    }
+
+    #[test]
+    fn test_deflate_zlib_incompressible_prefers_stored() {
+        let mut data = vec![0u8; 10_000];
+        // High-entropy pattern to discourage compression
+        let mut rng = rand::rngs::StdRng::seed_from_u64(1234);
+        rng.fill(data.as_mut_slice());
+
+        let encoded = deflate_zlib(&data, 6);
+        let decoded = decompress_zlib(&encoded);
+        assert_eq!(decoded, data);
+        // stored overhead per 65535 block is 5 bytes + header/adler
+        let stored_overhead = (data.len() / 65_535 + 1) * 5 + 2 + 4;
+        assert!(encoded.len() <= data.len() + stored_overhead);
     }
 }

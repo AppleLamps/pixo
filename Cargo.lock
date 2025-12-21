@@ -314,6 +314,7 @@ name = "comprs"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "flate2",
  "image",
  "proptest",
  "rand 0.8.5",
