@@ -115,6 +115,30 @@ fn test_different_images() {
     assert_ne!(black_png, white_png);
 }
 
+/// Ensure encoded PNGs decode correctly via the `image` crate (zlib wrapper validity).
+#[test]
+fn test_png_roundtrip_decode_rgb() {
+    let width = 3;
+    let height = 2;
+    let pixels = vec![
+        // row 0
+        255, 0, 0, // red
+        0, 255, 0, // green
+        0, 0, 255, // blue
+        // row 1
+        255, 255, 0, // yellow
+        0, 255, 255, // cyan
+        255, 0, 255, // magenta
+    ];
+
+    let encoded = png::encode(&pixels, width, height, ColorType::Rgb).unwrap();
+
+    let decoded = image::load_from_memory(&encoded).expect("decode").to_rgb8();
+    assert_eq!(decoded.width(), width);
+    assert_eq!(decoded.height(), height);
+    assert_eq!(decoded.as_raw(), &pixels);
+}
+
 /// Test filter strategies produce valid output.
 #[test]
 fn test_filter_strategies() {

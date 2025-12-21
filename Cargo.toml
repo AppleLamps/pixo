@@ -24,6 +24,7 @@ rayon = { version = "1.10", optional = true }
 criterion = { version = "0.5", features = ["html_reports"] }
 image = "0.25"
 
+
 [[bench]]
 name = "encode_benchmark"
 harness = false

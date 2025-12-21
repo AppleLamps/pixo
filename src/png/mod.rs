@@ -6,7 +6,7 @@ pub mod chunk;
 pub mod filter;
 
 use crate::color::ColorType;
-use crate::compress::deflate;
+use crate::compress::deflate::deflate_zlib;
 use crate::error::{Error, Result};
 
 /// PNG file signature (magic bytes).
@@ -106,7 +106,7 @@ pub fn encode_with_options(
 
     // Apply filtering and compression
     let filtered = filter::apply_filters(data, width, height, bytes_per_pixel, options);
-    let compressed = deflate(&filtered, options.compression_level);
+    let compressed = deflate_zlib(&filtered, options.compression_level);
 
     // Write IDAT chunk(s)
     write_idat_chunks(&mut output, &compressed);

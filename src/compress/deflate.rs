@@ -3,7 +3,7 @@
 //! Combines LZ77 compression with Huffman coding.
 
 use crate::bits::BitWriter;
-use crate::compress::huffman;
+use crate::compress::{adler32::adler32, huffman};
 use crate::compress::lz77::{Lz77Compressor, Token, MAX_MATCH_LENGTH, MIN_MATCH_LENGTH};
 
 /// Length code base values (codes 257-285).
@@ -106,6 +106,24 @@ pub fn deflate(data: &[u8], level: u8) -> Vec<u8> {
     encode_fixed_huffman(&tokens)
 }
 
+/// Compress data and wrap it in a zlib container (RFC 1950).
+///
+/// Produces: zlib header (CMF/FLG), deflate stream, Adler-32 checksum.
+pub fn deflate_zlib(data: &[u8], level: u8) -> Vec<u8> {
+    let mut output = Vec::with_capacity(data.len() / 2 + 16);
+
+    let header = zlib_header(level);
+    output.extend_from_slice(&header);
+
+    let deflated = deflate(data, level);
+    output.extend_from_slice(&deflated);
+
+    let checksum = adler32(data);
+    output.extend_from_slice(&checksum.to_be_bytes());
+
+    output
+}
+
 /// Encode tokens using fixed Huffman codes.
 fn encode_fixed_huffman(tokens: &[Token]) -> Vec<u8> {
     let lit_codes = huffman::fixed_literal_codes();
@@ -165,6 +183,25 @@ fn reverse_bits(code: u16, length: u8) -> u32 {
         code >>= 1;
     }
     result
+}
+
+/// Build the two-byte zlib header for the given compression level.
+fn zlib_header(level: u8) -> [u8; 2] {
+    // CMF: 0b0111_1000 (Deflate, 32K window)
+    let cmf: u8 = 0x78;
+
+    // Map level to FLEVEL (informative only)
+    let flevel = match level {
+        0 | 1 | 2 => 1,        // fast
+        3..=6 => 2,            // default
+        _ => 3,                // maximum
+    };
+
+    let mut flg: u8 = flevel << 6; // FDICT=0
+    let fcheck = (31 - (((cmf as u16) << 8 | flg as u16) % 31)) % 31;
+    flg |= fcheck as u8;
+
+    [cmf, flg]
 }
 
 /// Compress data using DEFLATE with stored blocks (no compression).
@@ -241,6 +278,18 @@ mod tests {
 
         // Repetitive data should compress well
         assert!(compressed.len() < data.len());
+    }
+
+    #[test]
+    fn test_deflate_zlib_header_checksum() {
+        let data = b"hello";
+        let compressed = deflate_zlib(data, 6);
+
+        // Header should be 0x78 0x9C for default-ish compression
+        assert_eq!(&compressed[0..2], &[0x78, 0x9C]);
+
+        let checksum = u32::from_be_bytes(compressed[compressed.len() - 4..].try_into().unwrap());
+        assert_eq!(checksum, 0x062C0215);
     }
 
     #[test]
