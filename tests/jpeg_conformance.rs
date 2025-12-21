@@ -187,6 +187,37 @@ fn test_jpeg_decode_via_image() {
     assert_eq!(decoded_gray.height(), 5);
 }
 
+/// Randomized small-image decode across RGB/Gray and multiple qualities.
+#[test]
+fn test_jpeg_decode_random_small() {
+    let mut rng = StdRng::seed_from_u64(2025);
+    let dims = [(1, 1), (2, 3), (5, 4), (8, 8), (16, 9)];
+    let qualities = [50u8, 85u8, 95u8];
+
+    for &(w, h) in &dims {
+        // RGB
+        let mut rgb = vec![0u8; w * h * 3];
+        rng.fill(rgb.as_mut_slice());
+        for &q in &qualities {
+            let jpeg_rgb = jpeg::encode(&rgb, w as u32, h as u32, q).unwrap();
+            let decoded = image::load_from_memory(&jpeg_rgb).expect("decode rgb");
+            assert_eq!(decoded.width(), w as u32);
+            assert_eq!(decoded.height(), h as u32);
+        }
+
+        // Grayscale
+        let mut gray = vec![0u8; w * h];
+        rng.fill(gray.as_mut_slice());
+        for &q in &qualities {
+            let jpeg_gray =
+                jpeg::encode_with_color(&gray, w as u32, h as u32, q, ColorType::Gray).unwrap();
+            let decoded = image::load_from_memory(&jpeg_gray).expect("decode gray");
+            assert_eq!(decoded.width(), w as u32);
+            assert_eq!(decoded.height(), h as u32);
+        }
+    }
+}
+
 /// Test that DQT tables are present.
 #[test]
 fn test_dqt_present() {
