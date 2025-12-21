@@ -4,6 +4,7 @@
 
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
+use std::sync::LazyLock;
 
 /// Maximum code length for DEFLATE (15 bits for literals/lengths, 7 for distances).
 pub const MAX_CODE_LENGTH: usize = 15;
@@ -207,8 +208,8 @@ pub fn generate_canonical_codes(lengths: &[u8]) -> Vec<HuffmanCode> {
     codes
 }
 
-/// DEFLATE fixed Huffman codes for literal/length symbols (0-287).
-pub fn fixed_literal_codes() -> Vec<HuffmanCode> {
+/// Cached fixed Huffman codes for literal/length symbols (0-287).
+static FIXED_LITERAL_CODES: LazyLock<Vec<HuffmanCode>> = LazyLock::new(|| {
     let mut lengths = vec![0u8; 288];
 
     // 0-143: 8 bits
@@ -229,13 +230,27 @@ pub fn fixed_literal_codes() -> Vec<HuffmanCode> {
     }
 
     generate_canonical_codes(&lengths)
-}
+});
 
-/// DEFLATE fixed Huffman codes for distance symbols (0-31).
-pub fn fixed_distance_codes() -> Vec<HuffmanCode> {
+/// Cached fixed Huffman codes for distance symbols (0-31).
+static FIXED_DISTANCE_CODES: LazyLock<Vec<HuffmanCode>> = LazyLock::new(|| {
     // All distance codes are 5 bits in fixed Huffman
     let lengths = vec![5u8; 32];
     generate_canonical_codes(&lengths)
+});
+
+/// DEFLATE fixed Huffman codes for literal/length symbols (0-287).
+/// Returns a cached reference for O(1) access after first call.
+#[inline]
+pub fn fixed_literal_codes() -> &'static [HuffmanCode] {
+    &FIXED_LITERAL_CODES
+}
+
+/// DEFLATE fixed Huffman codes for distance symbols (0-31).
+/// Returns a cached reference for O(1) access after first call.
+#[inline]
+pub fn fixed_distance_codes() -> &'static [HuffmanCode] {
+    &FIXED_DISTANCE_CODES
 }
 
 #[cfg(test)]
@@ -316,7 +331,7 @@ mod tests {
         assert_eq!(codes.len(), 32);
 
         // All should be 5 bits
-        for code in &codes {
+        for code in codes {
             assert_eq!(code.length, 5);
         }
     }

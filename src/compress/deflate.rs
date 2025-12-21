@@ -29,7 +29,50 @@ const DISTANCE_EXTRA: [u8; 30] = [
     13,
 ];
 
+/// Lookup table for length codes: maps length (3-258) to (symbol, extra_bits).
+/// Index is (length - 3), value is (symbol - 257, extra_bits).
+const LENGTH_LOOKUP: [(u8, u8); 256] = {
+    let mut table = [(0u8, 0u8); 256];
+    let mut i = 0usize;
+    while i < 256 {
+        let length = i + 3;
+        // Find the appropriate code
+        let mut code_idx = 0usize;
+        while code_idx < 28 {
+            if length >= LENGTH_BASE[code_idx] as usize && length < LENGTH_BASE[code_idx + 1] as usize {
+                break;
+            }
+            code_idx += 1;
+        }
+        // code_idx 28 is for length 258
+        table[i] = (code_idx as u8, LENGTH_EXTRA[code_idx]);
+        i += 1;
+    }
+    table
+};
+
+/// Lookup table for distance codes: maps distance (1-32768) to code index.
+/// Uses a two-level approach for efficiency.
+const DISTANCE_LOOKUP_SMALL: [u8; 512] = {
+    let mut table = [0u8; 512];
+    let mut i = 1usize;
+    while i < 512 {
+        let mut code_idx = 0usize;
+        while code_idx < 29 {
+            if i >= DISTANCE_BASE[code_idx] as usize && i < DISTANCE_BASE[code_idx + 1] as usize {
+                break;
+            }
+            code_idx += 1;
+        }
+        table[i] = code_idx as u8;
+        i += 1;
+    }
+    table
+};
+
 /// Get the length code (257-285) for a match length.
+/// Uses a lookup table for O(1) performance.
+#[inline]
 fn length_code(length: u16) -> (u16, u8, u16) {
     debug_assert!(
         (MIN_MATCH_LENGTH as u16..=MAX_MATCH_LENGTH as u16).contains(&length),
@@ -37,41 +80,37 @@ fn length_code(length: u16) -> (u16, u8, u16) {
         length
     );
 
-    for (i, &base) in LENGTH_BASE.iter().enumerate() {
-        let next_base = if i + 1 < LENGTH_BASE.len() {
-            LENGTH_BASE[i + 1]
-        } else {
-            259
-        };
-        if length >= base && length < next_base {
-            let extra_bits = LENGTH_EXTRA[i];
-            let extra_value = length - base;
-            return (257 + i as u16, extra_bits, extra_value);
-        }
-    }
-
-    // Length 258
-    (285, 0, 0)
+    let idx = (length - 3) as usize;
+    let (code_offset, extra_bits) = LENGTH_LOOKUP[idx];
+    let symbol = 257 + code_offset as u16;
+    let extra_value = length - LENGTH_BASE[code_offset as usize];
+    (symbol, extra_bits, extra_value)
 }
 
 /// Get the distance code (0-29) for a match distance.
+/// Uses lookup table for small distances, bit manipulation for large.
+#[inline]
 fn distance_code(distance: u16) -> (u16, u8, u16) {
     debug_assert!(distance >= 1 && distance <= 32768, "Invalid distance");
 
-    for (i, &base) in DISTANCE_BASE.iter().enumerate() {
-        let next_base = if i + 1 < DISTANCE_BASE.len() {
-            DISTANCE_BASE[i + 1]
-        } else {
-            32769
-        };
-        if distance >= base && distance < next_base {
-            let extra_bits = DISTANCE_EXTRA[i];
-            let extra_value = distance - base;
-            return (i as u16, extra_bits, extra_value);
-        }
-    }
+    let code_idx = if distance < 512 {
+        // Use direct lookup for small distances (covers codes 0-17)
+        DISTANCE_LOOKUP_SMALL[distance as usize] as usize
+    } else {
+        // For larger distances (512+), use bit manipulation
+        // The pattern for distance codes 4+ is:
+        // code = 2 * floor(log2(distance - 1)) - 2 + high_bit
+        // where high_bit is the second-highest bit of (distance - 1)
+        let d = distance as u32 - 1;
+        let msb = 31 - d.leading_zeros(); // position of highest set bit
+        let second_bit = (d >> (msb - 1)) & 1; // second highest bit
+        let code = (2 * msb - 2 + second_bit) as usize;
+        code.min(29)
+    };
 
-    unreachable!()
+    let extra_bits = DISTANCE_EXTRA[code_idx];
+    let extra_value = distance - DISTANCE_BASE[code_idx];
+    (code_idx as u16, extra_bits, extra_value)
 }
 
 /// Compress data using DEFLATE algorithm.
@@ -382,16 +421,34 @@ fn rle_code_lengths(
     encoded
 }
 
+/// Lookup table for reversing the bits in a byte.
+const REVERSE_BYTE: [u8; 256] = {
+    let mut table = [0u8; 256];
+    let mut i = 0usize;
+    while i < 256 {
+        let mut b = i as u8;
+        let mut r = 0u8;
+        let mut j = 0;
+        while j < 8 {
+            r = (r << 1) | (b & 1);
+            b >>= 1;
+            j += 1;
+        }
+        table[i] = r;
+        i += 1;
+    }
+    table
+};
+
 /// Reverse bits in a code (DEFLATE uses reversed bit order for Huffman codes).
+/// Uses a lookup table for O(1) byte reversal.
 #[inline]
 fn reverse_bits(code: u16, length: u8) -> u32 {
-    let mut result = 0u32;
-    let mut code = code as u32;
-    for _ in 0..length {
-        result = (result << 1) | (code & 1);
-        code >>= 1;
-    }
-    result
+    // Reverse all 16 bits using byte lookup table, then shift to correct position
+    let low = REVERSE_BYTE[code as u8 as usize] as u16;
+    let high = REVERSE_BYTE[(code >> 8) as u8 as usize] as u16;
+    let reversed = (low << 8) | high;
+    (reversed >> (16 - length)) as u32
 }
 
 /// Build the two-byte zlib header for the given compression level.

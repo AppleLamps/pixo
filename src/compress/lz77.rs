@@ -184,11 +184,42 @@ impl Lz77Compressor {
     }
 
     /// Calculate match length between two positions.
+    /// Uses multi-byte comparison for better performance.
     #[inline]
     fn match_length(&self, data: &[u8], pos1: usize, pos2: usize) -> usize {
         let max_len = (data.len() - pos2).min(MAX_MATCH_LENGTH);
         let mut length = 0;
 
+        // Compare 8 bytes at a time using u64
+        while length + 8 <= max_len {
+            // Safety: we've checked bounds above
+            let a = u64::from_ne_bytes(
+                data[pos1 + length..pos1 + length + 8]
+                    .try_into()
+                    .unwrap(),
+            );
+            let b = u64::from_ne_bytes(
+                data[pos2 + length..pos2 + length + 8]
+                    .try_into()
+                    .unwrap(),
+            );
+            if a != b {
+                // Find the first differing byte using trailing zeros
+                let xor = a ^ b;
+                #[cfg(target_endian = "little")]
+                {
+                    length += (xor.trailing_zeros() / 8) as usize;
+                }
+                #[cfg(target_endian = "big")]
+                {
+                    length += (xor.leading_zeros() / 8) as usize;
+                }
+                return length;
+            }
+            length += 8;
+        }
+
+        // Handle remaining bytes one at a time
         while length < max_len && data[pos1 + length] == data[pos2 + length] {
             length += 1;
         }

@@ -155,6 +155,7 @@ fn paeth_predictor(a: u8, b: u8, c: u8) -> u8 {
 }
 
 /// Adaptive filter selection: try all filters and pick the best.
+/// Optimized to track best score incrementally and potentially short-circuit.
 fn adaptive_filter(
     row: &[u8],
     prev_row: &[u8],
@@ -164,28 +165,73 @@ fn adaptive_filter(
 ) {
     scratch.clear();
 
-    // Apply each filter into reusable buffers
+    let mut best_filter = FILTER_NONE;
+    let mut best_score = u64::MAX;
+
+    // Try None filter first
     scratch.none.extend_from_slice(row);
+    let score = score_filter(&scratch.none);
+    if score < best_score {
+        best_score = score;
+        best_filter = FILTER_NONE;
+    }
+
+    // A score of 0 means all zeros - can't do better
+    if best_score == 0 {
+        output.push(best_filter);
+        output.extend_from_slice(&scratch.none);
+        return;
+    }
+
+    // Try Sub filter
     filter_sub(row, bpp, &mut scratch.sub);
+    let score = score_filter(&scratch.sub);
+    if score < best_score {
+        best_score = score;
+        best_filter = FILTER_SUB;
+        if best_score == 0 {
+            output.push(best_filter);
+            output.extend_from_slice(&scratch.sub);
+            return;
+        }
+    }
+
+    // Try Up filter
     filter_up(row, prev_row, &mut scratch.up);
+    let score = score_filter(&scratch.up);
+    if score < best_score {
+        best_score = score;
+        best_filter = FILTER_UP;
+        if best_score == 0 {
+            output.push(best_filter);
+            output.extend_from_slice(&scratch.up);
+            return;
+        }
+    }
+
+    // Try Average filter
     filter_average(row, prev_row, bpp, &mut scratch.avg);
+    let score = score_filter(&scratch.avg);
+    if score < best_score {
+        best_score = score;
+        best_filter = FILTER_AVERAGE;
+        if best_score == 0 {
+            output.push(best_filter);
+            output.extend_from_slice(&scratch.avg);
+            return;
+        }
+    }
+
+    // Try Paeth filter
     filter_paeth(row, prev_row, bpp, &mut scratch.paeth);
-
-    // Score each filter (sum of absolute values - lower is better for compression)
-    let scores = [
-        (FILTER_NONE, score_filter(&scratch.none)),
-        (FILTER_SUB, score_filter(&scratch.sub)),
-        (FILTER_UP, score_filter(&scratch.up)),
-        (FILTER_AVERAGE, score_filter(&scratch.avg)),
-        (FILTER_PAETH, score_filter(&scratch.paeth)),
-    ];
-
-    // Find the filter with the lowest score
-    let (best_filter, _) = scores.iter().min_by_key(|(_, score)| *score).unwrap();
+    let score = score_filter(&scratch.paeth);
+    if score < best_score {
+        best_filter = FILTER_PAETH;
+    }
 
     // Output the best filter result
-    output.push(*best_filter);
-    match *best_filter {
+    output.push(best_filter);
+    match best_filter {
         FILTER_NONE => output.extend_from_slice(&scratch.none),
         FILTER_SUB => output.extend_from_slice(&scratch.sub),
         FILTER_UP => output.extend_from_slice(&scratch.up),

@@ -2,22 +2,27 @@
 
 /// Calculate Adler-32 checksum of data.
 ///
-/// Follows the reference algorithm with modulus 65521.
+/// Optimized to defer modulo operations to chunk boundaries for better performance.
+/// Uses NMAX = 5552 which is the largest n such that 255*n*(n+1)/2 + (n+1)*(65520) <= 2^32-1.
 #[inline]
 pub fn adler32(data: &[u8]) -> u32 {
     const MOD_ADLER: u32 = 65_521;
+    // NMAX is the largest n such that we can accumulate n bytes without overflow
+    // 255*n*(n+1)/2 + (n+1)*(65520) <= 2^32-1
+    const NMAX: usize = 5552;
 
     let mut s1: u32 = 1;
     let mut s2: u32 = 0;
 
-    // Process in reasonably sized blocks to limit modulo operations.
-    const NMAX: usize = 5552;
-    let mut chunks = data.chunks(NMAX);
-    while let Some(chunk) = chunks.next() {
+    // Process in chunks, only applying modulo at chunk boundaries
+    for chunk in data.chunks(NMAX) {
         for &b in chunk {
-            s1 = (s1 + b as u32) % MOD_ADLER;
-            s2 = (s2 + s1) % MOD_ADLER;
+            s1 += b as u32;
+            s2 += s1;
         }
+        // Apply modulo only once per chunk instead of per byte
+        s1 %= MOD_ADLER;
+        s2 %= MOD_ADLER;
     }
 
     (s2 << 16) | s1
