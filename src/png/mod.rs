@@ -72,6 +72,10 @@ pub fn encode_with_options(
     color_type: ColorType,
     options: &PngOptions,
 ) -> Result<Vec<u8>> {
+    if !(1..=9).contains(&options.compression_level) {
+        return Err(Error::InvalidCompressionLevel(options.compression_level));
+    }
+
     // Validate dimensions
     if width == 0 || height == 0 {
         return Err(Error::InvalidDimensions { width, height });

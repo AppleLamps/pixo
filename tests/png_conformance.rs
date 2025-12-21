@@ -382,6 +382,24 @@ fn test_invalid_input() {
     assert!(png::encode(&[0, 0, 0, 0], 1, 1, ColorType::Rgb).is_err()); // Too long
 }
 
+#[test]
+fn test_invalid_compression_level() {
+    let pixels = vec![0u8; 4 * 4 * 3];
+    let opts = png::PngOptions {
+        compression_level: 0,
+        ..Default::default()
+    };
+    let err = png::encode_with_options(&pixels, 4, 4, ColorType::Rgb, &opts).unwrap_err();
+    assert!(matches!(err, Error::InvalidCompressionLevel(0)));
+
+    let opts = png::PngOptions {
+        compression_level: 10,
+        ..Default::default()
+    };
+    let err = png::encode_with_options(&pixels, 4, 4, ColorType::Rgb, &opts).unwrap_err();
+    assert!(matches!(err, Error::InvalidCompressionLevel(10)));
+}
+
 /// Test large image encoding.
 #[test]
 fn test_large_image() {
