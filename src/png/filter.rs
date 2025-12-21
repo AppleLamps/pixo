@@ -5,6 +5,35 @@
 
 use super::{FilterStrategy, PngOptions};
 
+/// Scratch buffers reused for adaptive filtering to reduce per-row allocations.
+struct AdaptiveScratch {
+    none: Vec<u8>,
+    sub: Vec<u8>,
+    up: Vec<u8>,
+    avg: Vec<u8>,
+    paeth: Vec<u8>,
+}
+
+impl AdaptiveScratch {
+    fn new(row_len: usize) -> Self {
+        Self {
+            none: Vec::with_capacity(row_len),
+            sub: Vec::with_capacity(row_len),
+            up: Vec::with_capacity(row_len),
+            avg: Vec::with_capacity(row_len),
+            paeth: Vec::with_capacity(row_len),
+        }
+    }
+
+    fn clear(&mut self) {
+        self.none.clear();
+        self.sub.clear();
+        self.up.clear();
+        self.avg.clear();
+        self.paeth.clear();
+    }
+}
+
 /// Filter type bytes as defined by PNG specification.
 const FILTER_NONE: u8 = 0;
 const FILTER_SUB: u8 = 1;
@@ -29,6 +58,7 @@ pub fn apply_filters(
 
     // Previous row (starts as zeros)
     let mut prev_row = vec![0u8; row_bytes];
+    let mut adaptive_scratch = AdaptiveScratch::new(row_bytes);
 
     for y in 0..height as usize {
         let row_start = y * row_bytes;
@@ -57,7 +87,13 @@ pub fn apply_filters(
             }
             FilterStrategy::Adaptive => {
                 // Try all filters and pick the best one
-                adaptive_filter(row, &prev_row, bytes_per_pixel, &mut output);
+                adaptive_filter(
+                    row,
+                    &prev_row,
+                    bytes_per_pixel,
+                    &mut output,
+                    &mut adaptive_scratch,
+                );
             }
         }
 
@@ -128,30 +164,29 @@ fn paeth_predictor(a: u8, b: u8, c: u8) -> u8 {
 }
 
 /// Adaptive filter selection: try all filters and pick the best.
-fn adaptive_filter(row: &[u8], prev_row: &[u8], bpp: usize, output: &mut Vec<u8>) {
-    let row_len = row.len();
+fn adaptive_filter(
+    row: &[u8],
+    prev_row: &[u8],
+    bpp: usize,
+    output: &mut Vec<u8>,
+    scratch: &mut AdaptiveScratch,
+) {
+    scratch.clear();
 
-    // Buffers for each filter type
-    let mut none_buf = Vec::with_capacity(row_len);
-    let mut sub_buf = Vec::with_capacity(row_len);
-    let mut up_buf = Vec::with_capacity(row_len);
-    let mut avg_buf = Vec::with_capacity(row_len);
-    let mut paeth_buf = Vec::with_capacity(row_len);
+    // Apply each filter into reusable buffers
+    scratch.none.extend_from_slice(row);
+    filter_sub(row, bpp, &mut scratch.sub);
+    filter_up(row, prev_row, &mut scratch.up);
+    filter_average(row, prev_row, bpp, &mut scratch.avg);
+    filter_paeth(row, prev_row, bpp, &mut scratch.paeth);
 
-    // Apply each filter
-    none_buf.extend_from_slice(row);
-    filter_sub(row, bpp, &mut sub_buf);
-    filter_up(row, prev_row, &mut up_buf);
-    filter_average(row, prev_row, bpp, &mut avg_buf);
-    filter_paeth(row, prev_row, bpp, &mut paeth_buf);
-
-    // Score each filter (sum of absolute differences - lower is better for compression)
+    // Score each filter (sum of absolute values - lower is better for compression)
     let scores = [
-        (FILTER_NONE, score_filter(&none_buf)),
-        (FILTER_SUB, score_filter(&sub_buf)),
-        (FILTER_UP, score_filter(&up_buf)),
-        (FILTER_AVERAGE, score_filter(&avg_buf)),
-        (FILTER_PAETH, score_filter(&paeth_buf)),
+        (FILTER_NONE, score_filter(&scratch.none)),
+        (FILTER_SUB, score_filter(&scratch.sub)),
+        (FILTER_UP, score_filter(&scratch.up)),
+        (FILTER_AVERAGE, score_filter(&scratch.avg)),
+        (FILTER_PAETH, score_filter(&scratch.paeth)),
     ];
 
     // Find the filter with the lowest score
@@ -160,11 +195,11 @@ fn adaptive_filter(row: &[u8], prev_row: &[u8], bpp: usize, output: &mut Vec<u8>
     // Output the best filter result
     output.push(*best_filter);
     match *best_filter {
-        FILTER_NONE => output.extend_from_slice(&none_buf),
-        FILTER_SUB => output.extend_from_slice(&sub_buf),
-        FILTER_UP => output.extend_from_slice(&up_buf),
-        FILTER_AVERAGE => output.extend_from_slice(&avg_buf),
-        FILTER_PAETH => output.extend_from_slice(&paeth_buf),
+        FILTER_NONE => output.extend_from_slice(&scratch.none),
+        FILTER_SUB => output.extend_from_slice(&scratch.sub),
+        FILTER_UP => output.extend_from_slice(&scratch.up),
+        FILTER_AVERAGE => output.extend_from_slice(&scratch.avg),
+        FILTER_PAETH => output.extend_from_slice(&scratch.paeth),
         _ => unreachable!(),
     }
 }
