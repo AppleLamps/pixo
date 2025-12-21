@@ -356,6 +356,38 @@ pub unsafe fn score_filter_sse2(filtered: &[u8]) -> u64 {
     result
 }
 
+/// Score a filtered row using AVX2 SAD instruction (32-byte chunks).
+///
+/// # Safety
+/// Caller must ensure AVX2 is available on the current CPU.
+#[target_feature(enable = "avx2")]
+pub unsafe fn score_filter_avx2(filtered: &[u8]) -> u64 {
+    let offset = _mm256_set1_epi8(-128i8); // 0x80
+    let mut acc = _mm256_setzero_si256();
+    let mut remaining = filtered;
+
+    while remaining.len() >= 32 {
+        let v = _mm256_loadu_si256(remaining.as_ptr() as *const __m256i);
+        // Convert signed to unsigned magnitude by XORing with 0x80, then SAD vs 0x80.
+        let adjusted = _mm256_xor_si256(v, offset);
+        let sad = _mm256_sad_epu8(adjusted, offset); // produces four u64 lanes
+        acc = _mm256_add_epi64(acc, sad);
+        remaining = &remaining[32..];
+    }
+
+    // Horizontal sum of acc
+    let mut buf = [0u64; 4];
+    _mm256_storeu_si256(buf.as_mut_ptr() as *mut __m256i, acc);
+    let mut result = buf.iter().sum::<u64>();
+
+    // Remainder scalar
+    for &b in remaining {
+        result += (b as i8).unsigned_abs() as u64;
+    }
+
+    result
+}
+
 /// Apply Sub filter using SSE2.
 ///
 /// # Safety

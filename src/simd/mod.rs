@@ -73,6 +73,10 @@ pub fn match_length(data: &[u8], pos1: usize, pos2: usize, max_len: usize) -> us
 pub fn score_filter(filtered: &[u8]) -> u64 {
     #[cfg(target_arch = "x86_64")]
     {
+        if is_x86_feature_detected!("avx2") {
+            // Safety: We've verified AVX2 is available
+            return unsafe { x86_64::score_filter_avx2(filtered) };
+        }
         if is_x86_feature_detected!("sse2") {
             // Safety: We've verified SSE2 is available
             return unsafe { x86_64::score_filter_sse2(filtered) };
