@@ -17,7 +17,8 @@ pub const MAX_MATCH_LENGTH: usize = 258;
 pub const MIN_MATCH_LENGTH: usize = 3;
 
 /// Size of the hash table (power of 2 for fast modulo).
-const HASH_SIZE: usize = 1 << 15; // 32768 entries
+/// Enlarged to reduce collisions when using 4-byte hashes.
+const HASH_SIZE: usize = 1 << 16; // 65536 entries
 
 /// LZ77 token representing either a literal or a match.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,17 +34,15 @@ pub enum Token {
     },
 }
 
-/// Hash function for 3-byte sequences.
+/// Hash function for 4-byte sequences with better distribution.
 #[inline]
-fn hash3(data: &[u8], pos: usize) -> usize {
-    if pos + 2 >= data.len() {
+fn hash4(data: &[u8], pos: usize) -> usize {
+    if pos + 3 >= data.len() {
         return 0;
     }
-    let h = (data[pos] as u32)
-        | ((data[pos + 1] as u32) << 8)
-        | ((data[pos + 2] as u32) << 16);
-    // Multiply by a prime and take high bits
-    ((h.wrapping_mul(2654435769)) >> 17) as usize & (HASH_SIZE - 1)
+    let val = u32::from_le_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]);
+    // Multiplicative hash; 0x1E35_A7BD is used in several LZ implementations.
+    ((val.wrapping_mul(0x1E35_A7BD)) >> 16) as usize & (HASH_SIZE - 1)
 }
 
 /// LZ77 compressor with hash chain for fast matching.
@@ -147,20 +146,48 @@ impl Lz77Compressor {
             return None;
         }
 
-        let hash = hash3(data, pos);
+        let hash = hash4(data, pos);
         let mut chain_pos = self.head[hash];
         let mut best_length = MIN_MATCH_LENGTH - 1;
         let mut best_distance = 0;
 
         let max_distance = pos.min(MAX_DISTANCE);
-        let mut chain_count = 0;
+        let mut chain_remaining = self.max_chain_length;
 
-        while chain_pos >= 0 && chain_count < self.max_chain_length {
+        // Quick-rejection prefix for candidates when we have at least 4 bytes ahead.
+        let target_prefix = if pos + 4 <= data.len() {
+            Some(u32::from_le_bytes([
+                data[pos],
+                data[pos + 1],
+                data[pos + 2],
+                data[pos + 3],
+            ]))
+        } else {
+            None
+        };
+
+        while chain_pos >= 0 && chain_remaining > 0 {
             let match_pos = chain_pos as usize;
             let distance = pos - match_pos;
 
             if distance > max_distance {
                 break;
+            }
+
+            if let Some(prefix) = target_prefix {
+                if match_pos + 4 <= data.len() {
+                    let cand = u32::from_le_bytes([
+                        data[match_pos],
+                        data[match_pos + 1],
+                        data[match_pos + 2],
+                        data[match_pos + 3],
+                    ]);
+                    if cand != prefix {
+                        chain_pos = self.prev[match_pos % MAX_DISTANCE];
+                        chain_remaining -= 1;
+                        continue;
+                    }
+                }
             }
 
             // Compare strings
@@ -170,7 +197,7 @@ impl Lz77Compressor {
                 best_length = length;
                 best_distance = distance;
 
-                // Early exit if we found max length
+                // Early exit if we found max length.
                 if length >= MAX_MATCH_LENGTH {
                     break;
                 }
@@ -178,7 +205,7 @@ impl Lz77Compressor {
 
             // Follow chain
             chain_pos = self.prev[match_pos % MAX_DISTANCE];
-            chain_count += 1;
+            chain_remaining -= 1;
         }
 
         if best_length >= MIN_MATCH_LENGTH {
@@ -213,16 +240,8 @@ impl Lz77Compressor {
 
         // Compare 8 bytes at a time using u64
         while length + 8 <= max_len {
-            let a = u64::from_ne_bytes(
-                data[pos1 + length..pos1 + length + 8]
-                    .try_into()
-                    .unwrap(),
-            );
-            let b = u64::from_ne_bytes(
-                data[pos2 + length..pos2 + length + 8]
-                    .try_into()
-                    .unwrap(),
-            );
+            let a = u64::from_ne_bytes(data[pos1 + length..pos1 + length + 8].try_into().unwrap());
+            let b = u64::from_ne_bytes(data[pos2 + length..pos2 + length + 8].try_into().unwrap());
             if a != b {
                 // Find the first differing byte using trailing zeros
                 let xor = a ^ b;
@@ -250,11 +269,11 @@ impl Lz77Compressor {
     /// Update hash table for a position.
     #[inline]
     fn update_hash(&mut self, data: &[u8], pos: usize) {
-        if pos + 2 >= data.len() {
+        if pos + 3 >= data.len() {
             return;
         }
 
-        let hash = hash3(data, pos);
+        let hash = hash4(data, pos);
         self.prev[pos % MAX_DISTANCE] = self.head[hash];
         self.head[hash] = pos as i32;
     }
