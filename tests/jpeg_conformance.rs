@@ -376,6 +376,30 @@ fn test_jpeg_marker_structure_with_restart() {
     assert!(saw_dri, "DRI not found despite restart_interval");
 }
 
+/// Ensure DRI is absent when restart intervals are disabled.
+#[test]
+fn test_jpeg_no_restart_marker_without_interval() {
+    let width = 12;
+    let height = 9;
+    let mut rng = StdRng::seed_from_u64(7373);
+    let mut rgb = vec![0u8; (width * height * 3) as usize];
+    rng.fill(rgb.as_mut_slice());
+
+    let opts = jpeg::JpegOptions {
+        quality: 80,
+        subsampling: jpeg::Subsampling::S444,
+        restart_interval: None,
+    };
+
+    let jpeg_bytes =
+        jpeg::encode_with_options(&rgb, width, height, 80, ColorType::Rgb, &opts).unwrap();
+
+    assert!(
+        !jpeg_bytes.windows(2).any(|w| w == [0xFF, 0xDD]),
+        "Unexpected DRI marker when restart_interval is None"
+    );
+}
+
 fn jpeg_case_strategy(
 ) -> impl Strategy<Value = (u32, u32, u8, ColorType, jpeg::Subsampling, Option<u16>, Vec<u8>)> {
     (1u32..24, 1u32..24, 30u8..96)
