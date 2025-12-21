@@ -7,6 +7,7 @@ use comprs::{png, ColorType};
 use image::GenericImageView;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use proptest::prelude::*;
+use comprs::compress::crc32::crc32;
 mod support;
 use support::pngsuite::read_pngsuite;
 
@@ -170,6 +171,61 @@ fn test_png_roundtrip_random_small() {
             assert_eq!(decoded.height(), h as u32);
         }
     }
+}
+
+/// Validate chunk lengths and CRCs for a generated PNG.
+#[test]
+fn test_png_chunk_crc_and_lengths() {
+    let mut rng = StdRng::seed_from_u64(777);
+    let w = 12;
+    let h = 7;
+    let mut pixels = vec![0u8; (w * h * 3) as usize];
+    rng.fill(pixels.as_mut_slice());
+
+    let encoded = png::encode(&pixels, w, h, ColorType::Rgb).unwrap();
+
+    // PNG signature already validated elsewhere
+    let mut offset = 8;
+    let mut saw_iend = false;
+
+    while offset < encoded.len() {
+        // length (u32 big-endian)
+        assert!(offset + 8 <= encoded.len(), "truncated chunk header");
+        let len = u32::from_be_bytes(encoded[offset..offset + 4].try_into().unwrap()) as usize;
+        let chunk_type = &encoded[offset + 4..offset + 8];
+        offset += 8;
+
+        assert!(
+            offset + len + 4 <= encoded.len(),
+            "chunk overruns buffer: type={:?} len={}",
+            chunk_type,
+            len
+        );
+
+        let data = &encoded[offset..offset + len];
+        offset += len;
+
+        let stored_crc = u32::from_be_bytes(encoded[offset..offset + 4].try_into().unwrap());
+        offset += 4;
+
+        // CRC computed over type + data
+        let mut payload = Vec::with_capacity(4 + len);
+        payload.extend_from_slice(chunk_type);
+        payload.extend_from_slice(data);
+        let computed_crc = crc32(&payload);
+        assert_eq!(
+            stored_crc, computed_crc,
+            "CRC mismatch for chunk {:?}",
+            chunk_type
+        );
+
+        if chunk_type == b"IEND" {
+            saw_iend = true;
+            break;
+        }
+    }
+
+    assert!(saw_iend, "IEND not found");
 }
 
 fn png_image_strategy() -> impl Strategy<Value = (u32, u32, ColorType, Vec<u8>)> {
