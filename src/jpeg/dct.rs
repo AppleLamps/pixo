@@ -1,10 +1,126 @@
 //! Discrete Cosine Transform (DCT) implementation for JPEG.
 //!
-//! Uses the separable 2D DCT approach for efficiency.
+//! Uses the AAN (Arai-Agui-Nakajima) fast DCT algorithm for efficiency.
+//! The AAN algorithm uses only 5 multiplications and 29 additions per 8-point DCT,
+//! compared to 64 multiplications in the naive approach.
 
 use std::f32::consts::PI;
 
-/// Precomputed cosine values for DCT.
+// AAN DCT constants - precomputed trigonometric values
+// These are the scale factors for the AAN algorithm
+const A1: f32 = 0.7071067811865476; // cos(4*pi/16) = 1/sqrt(2)
+const A2: f32 = 0.5411961001461969; // cos(6*pi/16) - cos(2*pi/16)
+const A3: f32 = 0.7071067811865476; // cos(4*pi/16) = 1/sqrt(2)
+const A4: f32 = 1.3065629648763766; // cos(2*pi/16) + cos(6*pi/16)
+const A5: f32 = 0.3826834323650898; // cos(6*pi/16)
+
+// Post-scaling factors for the AAN algorithm to produce correctly normalized DCT output
+// These are: s[k] = 1/(4 * c[k]) where c[k] = cos(k*pi/16) for k > 0, c[0] = 1/sqrt(2)
+const S: [f32; 8] = [
+    0.35355339059327373, // 1/(2*sqrt(2))
+    0.25489778955207960, // 1/(4*cos(pi/16))
+    0.27059805007309850, // 1/(4*cos(2*pi/16))
+    0.30067244346752264, // 1/(4*cos(3*pi/16))
+    0.35355339059327373, // 1/(4*cos(4*pi/16)) = 1/(2*sqrt(2))
+    0.44998811156820780, // 1/(4*cos(5*pi/16))
+    0.65328148243818820, // 1/(4*cos(6*pi/16))
+    1.28145772387075310, // 1/(4*cos(7*pi/16))
+];
+
+/// Perform 2D DCT on an 8x8 block using AAN fast DCT algorithm.
+///
+/// Uses the separable property: 2D DCT = 1D DCT on rows, then 1D DCT on columns.
+/// Each 1D DCT uses the AAN algorithm with only 5 multiplications.
+pub fn dct_2d(block: &[f32; 64]) -> [f32; 64] {
+    let mut temp = [0.0f32; 64];
+    let mut result = [0.0f32; 64];
+
+    // 1D DCT on rows using AAN
+    for row in 0..8 {
+        let row_start = row * 8;
+        let mut row_data = [0.0f32; 8];
+        row_data.copy_from_slice(&block[row_start..row_start + 8]);
+        aan_dct_1d(&mut row_data);
+        temp[row_start..row_start + 8].copy_from_slice(&row_data);
+    }
+
+    // 1D DCT on columns using AAN
+    for col in 0..8 {
+        let mut col_data = [0.0f32; 8];
+
+        for row in 0..8 {
+            col_data[row] = temp[row * 8 + col];
+        }
+
+        aan_dct_1d(&mut col_data);
+
+        for row in 0..8 {
+            result[row * 8 + col] = col_data[row];
+        }
+    }
+
+    result
+}
+
+/// Perform 1D DCT on 8 values using the AAN algorithm.
+///
+/// The AAN algorithm uses only 5 multiplications and 29 additions,
+/// compared to 64 multiplications in the naive O(n²) approach.
+/// Based on: Arai, Agui, and Nakajima, "A Fast DCT-SQ Scheme for Images", 1988.
+#[inline]
+fn aan_dct_1d(data: &mut [f32; 8]) {
+    // Stage 1: Initial butterfly operations
+    let tmp0 = data[0] + data[7];
+    let tmp7 = data[0] - data[7];
+    let tmp1 = data[1] + data[6];
+    let tmp6 = data[1] - data[6];
+    let tmp2 = data[2] + data[5];
+    let tmp5 = data[2] - data[5];
+    let tmp3 = data[3] + data[4];
+    let tmp4 = data[3] - data[4];
+
+    // Stage 2: Even part - process tmp0, tmp1, tmp2, tmp3
+    let tmp10 = tmp0 + tmp3;
+    let tmp13 = tmp0 - tmp3;
+    let tmp11 = tmp1 + tmp2;
+    let tmp12 = tmp1 - tmp2;
+
+    data[0] = tmp10 + tmp11;
+    data[4] = tmp10 - tmp11;
+
+    // Rotation for indices 2 and 6
+    let z1 = (tmp12 + tmp13) * A1; // A1 = cos(4*pi/16)
+    data[2] = tmp13 + z1;
+    data[6] = tmp13 - z1;
+
+    // Stage 3: Odd part - process tmp4, tmp5, tmp6, tmp7
+    let tmp10 = tmp4 + tmp5;
+    let tmp11 = tmp5 + tmp6;
+    let tmp12 = tmp6 + tmp7;
+
+    // The rotator is modified from the standard AAN algorithm
+    // to handle the odd part correctly
+    let z5 = (tmp10 - tmp12) * A5; // A5 = cos(6*pi/16)
+    let z2 = tmp10 * A2 + z5; // A2 = cos(6*pi/16) - cos(2*pi/16)
+    let z4 = tmp12 * A4 + z5; // A4 = cos(2*pi/16) + cos(6*pi/16)
+    let z3 = tmp11 * A3; // A3 = cos(4*pi/16)
+
+    let z11 = tmp7 + z3;
+    let z13 = tmp7 - z3;
+
+    data[5] = z13 + z2;
+    data[3] = z13 - z2;
+    data[1] = z11 + z4;
+    data[7] = z11 - z4;
+
+    // Apply post-scaling to get properly normalized DCT coefficients
+    for i in 0..8 {
+        data[i] *= S[i];
+    }
+}
+
+// Keep the old implementation for reference and for the IDCT
+/// Precomputed cosine values for IDCT.
 /// cos_table[i][j] = cos((2*i + 1) * j * PI / 16)
 const COS_TABLE: [[f32; 8]; 8] = precompute_cos_table();
 
@@ -15,8 +131,6 @@ const fn precompute_cos_table() -> [[f32; 8]; 8] {
     while i < 8 {
         let mut j = 0;
         while j < 8 {
-            // cos((2*i + 1) * j * PI / 16)
-            // We need to compute this at compile time
             let angle = ((2 * i + 1) * j) as f32 * PI / 16.0;
             table[i][j] = cos_approx(angle);
             j += 1;
@@ -28,7 +142,6 @@ const fn precompute_cos_table() -> [[f32; 8]; 8] {
 
 /// Approximate cosine for const fn (Taylor series).
 const fn cos_approx(x: f32) -> f32 {
-    // Normalize x to [-PI, PI]
     let mut x = x;
     while x > PI {
         x -= 2.0 * PI;
@@ -37,7 +150,6 @@ const fn cos_approx(x: f32) -> f32 {
         x += 2.0 * PI;
     }
 
-    // Taylor series for cos(x)
     let x2 = x * x;
     let x4 = x2 * x2;
     let x6 = x4 * x2;
@@ -46,7 +158,7 @@ const fn cos_approx(x: f32) -> f32 {
     1.0 - x2 / 2.0 + x4 / 24.0 - x6 / 720.0 + x8 / 40320.0
 }
 
-/// Normalization factors for DCT.
+/// Normalization factors for IDCT.
 /// alpha(0) = 1/sqrt(2), alpha(k) = 1 for k > 0
 const ALPHA: [f32; 8] = [
     0.7071067811865476, // 1/sqrt(2)
@@ -58,55 +170,6 @@ const ALPHA: [f32; 8] = [
     1.0,
     1.0,
 ];
-
-/// Perform 2D DCT on an 8x8 block.
-///
-/// Uses the separable property: 2D DCT = 1D DCT on rows, then 1D DCT on columns.
-pub fn dct_2d(block: &[f32; 64]) -> [f32; 64] {
-    let mut temp = [0.0f32; 64];
-    let mut result = [0.0f32; 64];
-
-    // 1D DCT on rows
-    for row in 0..8 {
-        let row_start = row * 8;
-        dct_1d(
-            &block[row_start..row_start + 8],
-            &mut temp[row_start..row_start + 8],
-        );
-    }
-
-    // 1D DCT on columns
-    for col in 0..8 {
-        let mut col_in = [0.0f32; 8];
-        let mut col_out = [0.0f32; 8];
-
-        for row in 0..8 {
-            col_in[row] = temp[row * 8 + col];
-        }
-
-        dct_1d(&col_in, &mut col_out);
-
-        for row in 0..8 {
-            result[row * 8 + col] = col_out[row];
-        }
-    }
-
-    result
-}
-
-/// Perform 1D DCT on 8 values.
-fn dct_1d(input: &[f32], output: &mut [f32]) {
-    debug_assert_eq!(input.len(), 8);
-    debug_assert_eq!(output.len(), 8);
-
-    for k in 0..8 {
-        let mut sum = 0.0f32;
-        for n in 0..8 {
-            sum += input[n] * COS_TABLE[n][k];
-        }
-        output[k] = 0.5 * ALPHA[k] * sum;
-    }
-}
 
 /// Perform inverse 2D DCT on an 8x8 block.
 #[allow(dead_code)]

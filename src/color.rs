@@ -46,21 +46,29 @@ impl ColorType {
 /// Convert RGB to YCbCr color space (used by JPEG).
 ///
 /// Returns (Y, Cb, Cr) where each component is in range 0-255.
+/// Uses fixed-point integer arithmetic for performance (no floating point).
+///
+/// ITU-R BT.601 conversion coefficients scaled by 256:
+/// - Y  = 0.299*R + 0.587*G + 0.114*B  -> (77*R + 150*G + 29*B + 128) >> 8
+/// - Cb = -0.169*R - 0.331*G + 0.5*B + 128
+/// - Cr = 0.5*R - 0.419*G - 0.081*B + 128
 #[inline]
 pub fn rgb_to_ycbcr(r: u8, g: u8, b: u8) -> (u8, u8, u8) {
-    let r = r as f32;
-    let g = g as f32;
-    let b = b as f32;
+    let r = r as i32;
+    let g = g as i32;
+    let b = b as i32;
 
-    // ITU-R BT.601 conversion
-    let y = 0.299 * r + 0.587 * g + 0.114 * b;
-    let cb = -0.168736 * r - 0.331264 * g + 0.5 * b + 128.0;
-    let cr = 0.5 * r - 0.418688 * g - 0.081312 * b + 128.0;
+    // Fixed-point coefficients (scaled by 256)
+    // +128 for rounding before right shift
+    let y = (77 * r + 150 * g + 29 * b + 128) >> 8;
+    let cb = ((-43 * r - 85 * g + 128 * b + 128) >> 8) + 128;
+    let cr = ((128 * r - 107 * g - 21 * b + 128) >> 8) + 128;
 
+    // Clamp to valid range (the math should keep values in range, but be safe)
     (
-        y.round().clamp(0.0, 255.0) as u8,
-        cb.round().clamp(0.0, 255.0) as u8,
-        cr.round().clamp(0.0, 255.0) as u8,
+        y.clamp(0, 255) as u8,
+        cb.clamp(0, 255) as u8,
+        cr.clamp(0, 255) as u8,
     )
 }
 

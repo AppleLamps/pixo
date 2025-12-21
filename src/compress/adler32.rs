@@ -4,8 +4,25 @@
 ///
 /// Optimized to defer modulo operations to chunk boundaries for better performance.
 /// Uses NMAX = 5552 which is the largest n such that 255*n*(n+1)/2 + (n+1)*(65520) <= 2^32-1.
+///
+/// When the `simd` feature is enabled, uses SIMD acceleration for improved throughput.
 #[inline]
 pub fn adler32(data: &[u8]) -> u32 {
+    #[cfg(feature = "simd")]
+    {
+        crate::simd::adler32(data)
+    }
+
+    #[cfg(not(feature = "simd"))]
+    {
+        adler32_scalar(data)
+    }
+}
+
+/// Scalar implementation of Adler-32.
+#[inline]
+#[cfg_attr(feature = "simd", allow(dead_code))]
+fn adler32_scalar(data: &[u8]) -> u32 {
     const MOD_ADLER: u32 = 65_521;
     // NMAX is the largest n such that we can accumulate n bytes without overflow
     // 255*n*(n+1)/2 + (n+1)*(65520) <= 2^32-1

@@ -64,6 +64,58 @@ let options = JpegOptions {
 let jpeg_data = jpeg::encode_with_options(&pixels, 1, 1, 85, ColorType::Rgb, &options).unwrap();
 ```
 
+### Command-Line Interface
+
+The library includes a CLI tool for quick image compression from the terminal.
+
+#### Installation
+
+```bash
+# Install from source
+cargo install --path . --features cli
+
+# Or build locally
+cargo build --release --features cli
+```
+
+#### Usage
+
+```bash
+# Basic usage - compress to JPEG (default)
+comprs input.png -o output.jpg
+
+# Compress to PNG with maximum compression
+comprs input.jpg -o output.png -c 9
+
+# JPEG with custom quality (1-100)
+comprs photo.png -o photo.jpg -q 90
+
+# JPEG with 4:2:0 chroma subsampling (smaller files)
+comprs photo.png -o photo.jpg --subsampling s420
+
+# PNG with specific filter strategy
+comprs input.jpg -o output.png --filter paeth
+
+# Convert to grayscale
+comprs color.png -o gray.jpg --grayscale
+
+# Verbose output with timing and size info
+comprs input.png -o output.jpg -v
+```
+
+#### CLI Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-o, --output` | Output file path | `<input>.compressed.<ext>` |
+| `-f, --format` | Output format (`png`, `jpeg`, `jpg`) | Detected from extension |
+| `-q, --quality` | JPEG quality (1-100) | 85 |
+| `-c, --compression` | PNG compression level (1-9) | 6 |
+| `--subsampling` | JPEG chroma subsampling (`s444`, `s420`) | s444 |
+| `--filter` | PNG filter (`none`, `sub`, `up`, `average`, `paeth`, `adaptive`) | adaptive |
+| `--grayscale` | Convert to grayscale | false |
+| `-v, --verbose` | Show detailed output | false |
+
 ### Supported Color Types
 
 - `ColorType::Gray` - Grayscale (1 byte/pixel)
@@ -171,6 +223,7 @@ Note: tests and benches are validated on nightly toolchain; ensure `rustup overr
 
 ## Optional Features
 
+- `cli` - Build the command-line interface (`comprs` binary)
 - `simd` - Enable SIMD optimizations (requires nightly for some platforms)
 - `parallel` - Enable parallel processing with rayon
 

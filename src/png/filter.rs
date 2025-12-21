@@ -7,6 +7,9 @@ use super::{FilterStrategy, PngOptions};
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
+#[cfg(feature = "simd")]
+use crate::simd;
+
 /// Scratch buffers reused for adaptive filtering to reduce per-row allocations.
 struct AdaptiveScratch {
     none: Vec<u8>,
@@ -97,16 +100,34 @@ pub fn apply_filters(
 
 /// Sub filter: difference from left pixel.
 fn filter_sub(row: &[u8], bpp: usize, output: &mut Vec<u8>) {
-    for (i, &byte) in row.iter().enumerate() {
-        let left = if i >= bpp { row[i - bpp] } else { 0 };
-        output.push(byte.wrapping_sub(left));
+    #[cfg(feature = "simd")]
+    {
+        simd::filter_sub(row, bpp, output);
+        return;
+    }
+
+    #[cfg(not(feature = "simd"))]
+    {
+        for (i, &byte) in row.iter().enumerate() {
+            let left = if i >= bpp { row[i - bpp] } else { 0 };
+            output.push(byte.wrapping_sub(left));
+        }
     }
 }
 
 /// Up filter: difference from above pixel.
 fn filter_up(row: &[u8], prev_row: &[u8], output: &mut Vec<u8>) {
-    for (i, &byte) in row.iter().enumerate() {
-        output.push(byte.wrapping_sub(prev_row[i]));
+    #[cfg(feature = "simd")]
+    {
+        simd::filter_up(row, prev_row, output);
+        return;
+    }
+
+    #[cfg(not(feature = "simd"))]
+    {
+        for (i, &byte) in row.iter().enumerate() {
+            output.push(byte.wrapping_sub(prev_row[i]));
+        }
     }
 }
 
@@ -344,7 +365,15 @@ fn apply_filters_parallel(
 /// Lower scores typically result in better compression.
 #[inline]
 fn score_filter(filtered: &[u8]) -> u64 {
-    filtered.iter().map(|&b| (b as i8).unsigned_abs() as u64).sum()
+    #[cfg(feature = "simd")]
+    {
+        simd::score_filter(filtered)
+    }
+
+    #[cfg(not(feature = "simd"))]
+    {
+        filtered.iter().map(|&b| (b as i8).unsigned_abs() as u64).sum()
+    }
 }
 
 #[cfg(test)]

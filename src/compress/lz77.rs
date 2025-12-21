@@ -6,6 +6,10 @@
 /// Maximum distance to look back for matches (32KB window).
 pub const MAX_DISTANCE: usize = 32768;
 
+/// Threshold for "good enough" match - skip lazy matching above this length.
+/// This is a common optimization used by zlib to speed up compression.
+const GOOD_MATCH_LENGTH: usize = 32;
+
 /// Maximum match length (as per DEFLATE spec).
 pub const MAX_MATCH_LENGTH: usize = 258;
 
@@ -101,8 +105,9 @@ impl Lz77Compressor {
             let best_match = self.find_best_match(data, pos);
 
             if let Some((length, distance)) = best_match {
-                // Check for lazy match if enabled
-                if self.lazy_matching && pos + 1 < data.len() {
+                // Check for lazy match if enabled, but skip for "good enough" matches
+                // This is a common optimization used by zlib
+                if self.lazy_matching && length < GOOD_MATCH_LENGTH && pos + 1 < data.len() {
                     // Update hash for current position
                     self.update_hash(data, pos);
 
@@ -184,15 +189,30 @@ impl Lz77Compressor {
     }
 
     /// Calculate match length between two positions.
-    /// Uses multi-byte comparison for better performance.
+    /// Uses SIMD (when available) or multi-byte comparison for better performance.
     #[inline]
     fn match_length(&self, data: &[u8], pos1: usize, pos2: usize) -> usize {
         let max_len = (data.len() - pos2).min(MAX_MATCH_LENGTH);
+
+        #[cfg(feature = "simd")]
+        {
+            crate::simd::match_length(data, pos1, pos2, max_len)
+        }
+
+        #[cfg(not(feature = "simd"))]
+        {
+            Self::match_length_scalar(data, pos1, pos2, max_len)
+        }
+    }
+
+    /// Scalar implementation of match length comparison.
+    #[cfg(not(feature = "simd"))]
+    #[inline]
+    fn match_length_scalar(data: &[u8], pos1: usize, pos2: usize, max_len: usize) -> usize {
         let mut length = 0;
 
         // Compare 8 bytes at a time using u64
         while length + 8 <= max_len {
-            // Safety: we've checked bounds above
             let a = u64::from_ne_bytes(
                 data[pos1 + length..pos1 + length + 8]
                     .try_into()

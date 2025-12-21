@@ -28,7 +28,8 @@
 //! let jpeg_data = jpeg::encode(&rgb_pixels, 1, 1, 85).unwrap();
 //! ```
 
-#![forbid(unsafe_code)]
+// Allow unsafe code only when SIMD feature is enabled (required for intrinsics)
+#![cfg_attr(not(feature = "simd"), forbid(unsafe_code))]
 #![warn(missing_docs)]
 
 pub mod bits;
@@ -37,6 +38,9 @@ pub mod compress;
 pub mod error;
 pub mod jpeg;
 pub mod png;
+
+#[cfg(feature = "simd")]
+pub mod simd;
 
 pub use color::ColorType;
 pub use error::{Error, Result};

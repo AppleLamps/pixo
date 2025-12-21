@@ -142,25 +142,46 @@ impl BitWriterMsb {
     }
 
     /// Write bits to the stream, MSB first.
+    ///
+    /// Optimized to process multiple bits at once instead of bit-by-bit.
     #[inline]
     pub fn write_bits(&mut self, value: u32, num_bits: u8) {
         debug_assert!(num_bits <= 32);
 
-        for i in (0..num_bits).rev() {
-            let bit = ((value >> i) & 1) as u8;
-            self.bit_position -= 1;
-            self.current_byte |= bit << self.bit_position;
+        let mut remaining = num_bits;
+        let val = value;
 
+        while remaining > 0 {
+            let space = self.bit_position;
+            let to_write = remaining.min(space);
+
+            // Extract the top `to_write` bits from the remaining value
+            // and place them in the current byte at the correct position
+            let shift = remaining - to_write;
+            let mask = (1u32 << to_write) - 1;
+            let bits = ((val >> shift) & mask) as u8;
+
+            self.bit_position -= to_write;
+            self.current_byte |= bits << self.bit_position;
+            remaining -= to_write;
+
+            // If byte is full, flush it with JPEG byte stuffing
             if self.bit_position == 0 {
-                self.buffer.push(self.current_byte);
-                // JPEG byte stuffing: if we wrote 0xFF, add 0x00
-                if self.current_byte == 0xFF {
-                    self.buffer.push(0x00);
-                }
-                self.current_byte = 0;
-                self.bit_position = 8;
+                self.flush_byte_with_stuffing();
             }
         }
+    }
+
+    /// Flush the current byte and apply JPEG byte stuffing if needed.
+    #[inline]
+    fn flush_byte_with_stuffing(&mut self) {
+        self.buffer.push(self.current_byte);
+        // JPEG byte stuffing: if we wrote 0xFF, add 0x00
+        if self.current_byte == 0xFF {
+            self.buffer.push(0x00);
+        }
+        self.current_byte = 0;
+        self.bit_position = 8;
     }
 
     /// Write a single bit.
