@@ -4,7 +4,10 @@
 //! that encoded images can be decoded correctly.
 
 use comprs::{png, ColorType};
+use image::GenericImageView;
 use rand::{rngs::StdRng, Rng, SeedableRng};
+mod support;
+use support::pngsuite::read_pngsuite;
 
 /// Test that PNG output has correct header.
 #[test]
@@ -165,6 +168,34 @@ fn test_png_roundtrip_random_small() {
             assert_eq!(decoded.width(), w as u32);
             assert_eq!(decoded.height(), h as u32);
         }
+    }
+}
+
+/// Conformance: encode output of PngSuite fixtures and ensure decode success.
+#[test]
+fn test_pngsuite_encode_and_decode() {
+    let Ok(cases) = read_pngsuite() else {
+        eprintln!("Skipping PngSuite test: fixtures unavailable (offline?)");
+        return;
+    };
+
+    for (path, bytes) in cases {
+        // Decode using `image` as source pixels
+        let img = image::load_from_memory(&bytes).expect("decode fixture");
+        let rgba = img.to_rgba8();
+        let (w, h) = img.dimensions();
+
+        // Encode through our pipeline (RGBA)
+        let encoded = png::encode(rgba.as_raw(), w, h, ColorType::Rgba).unwrap();
+
+        // Decode the encoded PNG to ensure validity
+        let decoded = image::load_from_memory(&encoded).expect("decode reencoded");
+        assert_eq!(
+            decoded.dimensions(),
+            (w, h),
+            "dimension mismatch for {:?}",
+            path
+        );
     }
 }
 
