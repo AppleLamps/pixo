@@ -103,6 +103,8 @@ const LENGTH_LOOKUP: [(u8, u8); 256] = {
 /// straight to dynamic codes to avoid double-encoding overhead on large
 /// payloads (common for PNG scanlines).
 const DYNAMIC_ONLY_TOKEN_THRESHOLD: usize = 128;
+/// Below this token count, prefer fixed Huffman only to avoid double encoding.
+const FIXED_ONLY_TOKEN_THRESHOLD: usize = 64;
 /// Below this byte length, favor a simpler path and optionally skip dynamic Huffman.
 const SMALL_INPUT_BYTES: usize = 1 << 10; // 1 KiB
 
@@ -130,6 +132,10 @@ fn with_reusable_deflater<T>(level: u8, f: impl FnOnce(&mut Deflater) -> T) -> T
 
 #[inline]
 fn encode_best_huffman(tokens: &[Token], est_bytes: usize) -> (Vec<u8>, bool) {
+    if tokens.len() <= FIXED_ONLY_TOKEN_THRESHOLD {
+        return (encode_fixed_huffman_with_capacity(tokens, est_bytes), false);
+    }
+
     if tokens.len() >= DYNAMIC_ONLY_TOKEN_THRESHOLD {
         return (
             encode_dynamic_huffman_with_capacity(tokens, est_bytes),
@@ -148,6 +154,13 @@ fn encode_best_huffman(tokens: &[Token], est_bytes: usize) -> (Vec<u8>, bool) {
 
 #[inline]
 fn encode_best_huffman_packed(tokens: &[PackedToken], est_bytes: usize) -> (Vec<u8>, bool) {
+    if tokens.len() <= FIXED_ONLY_TOKEN_THRESHOLD {
+        return (
+            encode_fixed_huffman_packed_with_capacity(tokens, est_bytes),
+            false,
+        );
+    }
+
     if tokens.len() >= DYNAMIC_ONLY_TOKEN_THRESHOLD {
         return (
             encode_dynamic_huffman_packed_with_capacity(tokens, est_bytes),
