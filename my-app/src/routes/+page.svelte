@@ -10,6 +10,7 @@
 		size: number;
 		width: number;
 		height: number;
+		hasAlpha: boolean;
 		originalUrl: string;
 		imageData: ImageData;
 		status: JobStatus;
@@ -70,6 +71,13 @@
 		return `${sign}${Math.abs(delta).toFixed(1)}%`;
 	}
 
+function detectAlpha(data: Uint8ClampedArray) {
+	for (let i = 3; i < data.length; i += 4) {
+		if (data[i] !== 255) return true;
+	}
+	return false;
+}
+
 	function isSupported(file: File) {
 		return acceptMime.includes(file.type);
 	}
@@ -88,7 +96,12 @@
 		ctx.drawImage(bitmap, 0, 0);
 		const imageData = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
 		bitmap.close();
-		return { imageData, width: bitmap.width, height: bitmap.height };
+		return {
+			imageData,
+			width: bitmap.width,
+			height: bitmap.height,
+			hasAlpha: detectAlpha(imageData.data)
+		};
 	}
 
 	async function addFiles(fileList: FileList | File[]) {
@@ -100,7 +113,7 @@
 			alert(`Unsupported files skipped: ${rejected.map((f) => f.name).join(', ')}`);
 		}
 		for (const file of supported) {
-			const { imageData, width, height } = await decodeFile(file);
+			const { imageData, width, height, hasAlpha } = await decodeFile(file);
 			const url = URL.createObjectURL(file);
 			const id = crypto.randomUUID();
 			jobs = [
@@ -112,6 +125,7 @@
 					size: file.size,
 					width,
 					height,
+					hasAlpha,
 					originalUrl: url,
 					imageData,
 					status: 'idle',
@@ -333,6 +347,11 @@
 								}}
 							/>
 							<p class="text-xs text-slate-500">85 is a good balance for web.</p>
+							{#if job.hasAlpha}
+								<p class="text-xs font-semibold text-amber-300">
+									Transparency will be flattened when exporting to JPEG.
+								</p>
+							{/if}
 						</label>
 					{:else}
 						<label class="space-y-2 text-sm text-slate-200">
