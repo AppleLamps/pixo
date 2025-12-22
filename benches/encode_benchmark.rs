@@ -100,6 +100,7 @@ fn jpeg_encoding_benchmark(c: &mut Criterion) {
 
         group.throughput(Throughput::Bytes(pixel_bytes));
 
+        let mut jpeg_buf_444 = Vec::new();
         let opts_420 = jpeg::JpegOptions {
             quality: 85,
             subsampling: jpeg::Subsampling::S420,
@@ -110,16 +111,33 @@ fn jpeg_encoding_benchmark(c: &mut Criterion) {
             BenchmarkId::new("comprs_q85_444", format!("{}x{}", size, size)),
             &pixels,
             |b, pixels| {
-                b.iter(|| jpeg::encode(black_box(pixels), *size, *size, 85).unwrap());
+                b.iter(|| {
+                    jpeg::encode_with_options_into(
+                        &mut jpeg_buf_444,
+                        black_box(pixels),
+                        *size,
+                        *size,
+                        85,
+                        ColorType::Rgb,
+                        &jpeg::JpegOptions {
+                            quality: 85,
+                            subsampling: jpeg::Subsampling::S444,
+                            restart_interval: None,
+                        },
+                    )
+                    .unwrap()
+                });
             },
         );
 
+        let mut jpeg_buf_420 = Vec::new();
         group.bench_with_input(
             BenchmarkId::new("comprs_q85_420", format!("{}x{}", size, size)),
             &pixels,
             |b, pixels| {
                 b.iter(|| {
-                    jpeg::encode_with_options(
+                    jpeg::encode_with_options_into(
+                        &mut jpeg_buf_420,
                         black_box(pixels),
                         *size,
                         *size,
@@ -237,11 +255,24 @@ fn compression_ratio_benchmark(c: &mut Criterion) {
 
         // JPEG quality comparison
         for quality in [50, 75, 90].iter() {
+            let mut jpeg_buf = Vec::new();
             group.bench_function(format!("JPEG q{} (comprs)", quality), |b| {
                 b.iter(|| {
-                    let result =
-                        jpeg::encode(black_box(&gradient), *width, *height, *quality).unwrap();
-                    result.len()
+                    jpeg::encode_with_options_into(
+                        &mut jpeg_buf,
+                        black_box(&gradient),
+                        *width,
+                        *height,
+                        *quality,
+                        ColorType::Rgb,
+                        &jpeg::JpegOptions {
+                            quality: *quality,
+                            subsampling: jpeg::Subsampling::S444,
+                            restart_interval: None,
+                        },
+                    )
+                    .unwrap();
+                    jpeg_buf.len()
                 });
             });
 
