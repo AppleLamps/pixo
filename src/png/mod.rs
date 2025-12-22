@@ -27,8 +27,8 @@ pub struct PngOptions {
 impl Default for PngOptions {
     fn default() -> Self {
         Self {
-            // Prefer speed; level 4 retains decent compression at higher throughput.
-            compression_level: 4,
+            // Prefer speed; level 3 retains decent compression at higher throughput.
+            compression_level: 3,
             // AdaptiveFast reduces per-row work with minimal compression impact.
             filter_strategy: FilterStrategy::AdaptiveFast,
         }
