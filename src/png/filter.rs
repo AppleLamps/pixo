@@ -63,7 +63,11 @@ pub fn apply_filters(
     // Parallel path (only for adaptive; other strategies are trivial)
     #[cfg(feature = "parallel")]
     {
-        if matches!(options.filter_strategy, FilterStrategy::Adaptive) && height > 1 {
+        if matches!(
+            options.filter_strategy,
+            FilterStrategy::Adaptive | FilterStrategy::AdaptiveFast
+        ) && height > 1
+        {
             return apply_filters_parallel(
                 data,
                 height as usize,
