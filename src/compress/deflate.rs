@@ -107,6 +107,8 @@ const DYNAMIC_ONLY_TOKEN_THRESHOLD: usize = 128;
 const FIXED_ONLY_TOKEN_THRESHOLD: usize = 128;
 /// Below this byte length, favor a simpler path and optionally skip dynamic Huffman.
 const SMALL_INPUT_BYTES: usize = 1 << 10; // 1 KiB
+/// When input has only literals (no matches) and meets this size, prefer stored blocks immediately.
+const STORED_LITERAL_ONLY_BYTES: usize = 8 * 1024;
 
 thread_local! {
     /// Thread-local pool of reusable deflaters keyed by compression level.
@@ -322,6 +324,23 @@ pub fn deflate_packed_with_stats(data: &[u8], level: u8) -> (Vec<u8>, DeflateSta
 
     let (literal_count, match_count) = token_counts_packed(&tokens);
 
+    // Literal-only fast path to skip Huffman work for incompressible data.
+    if match_count == 0 && data.len() >= STORED_LITERAL_ONLY_BYTES {
+        let stored = deflate_stored(data);
+        let stats = DeflateStats {
+            lz77_time,
+            fixed_huffman_time: Duration::ZERO,
+            dynamic_huffman_time: Duration::ZERO,
+            choose_time: Duration::ZERO,
+            token_count: tokens.len(),
+            literal_count,
+            match_count,
+            used_dynamic: false,
+            used_stored_block: true,
+        };
+        return (stored, stats);
+    }
+
     let est_bytes = estimated_deflate_size(data.len(), level);
 
     let t1 = Instant::now();
@@ -352,7 +371,6 @@ pub fn deflate_packed_with_stats(data: &[u8], level: u8) -> (Vec<u8>, DeflateSta
     (encoded, stats)
 }
 
-#[cfg(feature = "timing")]
 fn token_counts_packed(tokens: &[PackedToken]) -> (usize, usize) {
     let mut literal_count = 0;
     let mut match_count = 0;
@@ -498,6 +516,12 @@ impl Deflater {
         self.lz77
             .compress_packed_into(data, &mut self.packed_tokens);
 
+        let (_literal_count, match_count) = token_counts_packed(&self.packed_tokens);
+
+        if match_count == 0 && data.len() >= STORED_LITERAL_ONLY_BYTES {
+            return deflate_stored(data);
+        }
+
         let est_bytes = estimated_deflate_size(data.len(), self.level);
         let (encoded, _) = encode_best_huffman_packed(&self.packed_tokens, est_bytes);
         encoded
@@ -546,6 +570,17 @@ impl Deflater {
         self.packed_tokens.reserve(data.len());
         self.lz77
             .compress_packed_into(data, &mut self.packed_tokens);
+
+        let (_literal_count, match_count) = token_counts_packed(&self.packed_tokens);
+
+        if match_count == 0 && data.len() >= STORED_LITERAL_ONLY_BYTES {
+            let stored_blocks = deflate_stored(data);
+            let mut output = Vec::with_capacity(stored_blocks.len().min(data.len()) + 32);
+            output.extend_from_slice(&zlib_header(self.level));
+            output.extend_from_slice(&stored_blocks);
+            output.extend_from_slice(&adler32(data).to_be_bytes());
+            return output;
+        }
 
         let est_bytes = estimated_deflate_size(data.len(), self.level);
         let (deflated, _) = encode_best_huffman_packed(&self.packed_tokens, est_bytes);
