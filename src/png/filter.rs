@@ -63,7 +63,16 @@ pub fn apply_filters(
     // Height-aware strategy tweaks: for tall images, favor sampled adaptive to
     // reduce per-row work while preserving quality.
     let mut strategy = options.filter_strategy;
-    if matches!(strategy, FilterStrategy::AdaptiveFast) && height >= 512 {
+    let area = (width as usize).saturating_mul(height as usize);
+    // For very small images, prefer Sub filter to minimize CPU overhead.
+    if area <= 4096
+        && matches!(
+            strategy,
+            FilterStrategy::Adaptive | FilterStrategy::AdaptiveFast
+        )
+    {
+        strategy = FilterStrategy::Sub;
+    } else if matches!(strategy, FilterStrategy::AdaptiveFast) && height >= 512 {
         strategy = FilterStrategy::AdaptiveSampled { interval: 4 };
     }
 
