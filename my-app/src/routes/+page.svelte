@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { compressImage, type PngFilter } from '$lib/wasm';
-	import { onDestroy } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 
 	type JobStatus = 'idle' | 'compressing' | 'done' | 'error';
 
@@ -130,6 +130,26 @@ function detectAlpha(data: Uint8ClampedArray) {
 		const input = document.getElementById(fileInputId) as HTMLInputElement | null;
 		if (input) input.click();
 	}
+
+	onMount(() => {
+		const handler = (e: KeyboardEvent) => {
+			const target = e.target as HTMLElement | null;
+			const isTypingContext =
+				target &&
+				(target.tagName === 'INPUT' ||
+					target.tagName === 'TEXTAREA' ||
+					target.isContentEditable);
+			if (isTypingContext) return;
+
+			if (e.key.toLowerCase() === 'o' && (e.metaKey || e.ctrlKey)) {
+				e.preventDefault();
+				triggerFilePicker();
+			}
+		};
+
+		window.addEventListener('keydown', handler);
+		return () => window.removeEventListener('keydown', handler);
+	});
 
 	function resetInput(event: Event) {
 		const target = event.target as HTMLInputElement;
