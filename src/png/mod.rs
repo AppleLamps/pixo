@@ -50,6 +50,10 @@ pub enum FilterStrategy {
     Adaptive,
     /// Adaptive but with early cut and limited trials (faster).
     AdaptiveFast,
+    /// Adaptive on sampled rows, reuse chosen filter on intervening rows.
+    /// `interval` must be >= 1. Example: interval=4 runs full adaptive
+    /// every 4th row and reuses the last chosen filter for others.
+    AdaptiveSampled { interval: u32 },
 }
 
 /// Encode raw pixel data as PNG.
