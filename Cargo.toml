@@ -24,6 +24,7 @@ required-features = ["cli"]
 default = ["simd", "parallel"]
 simd = []
 parallel = ["rayon"]
+timing = []
 cli = ["clap", "png", "jpeg-decoder"]
 
 [dependencies]

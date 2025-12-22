@@ -7,6 +7,8 @@ pub mod filter;
 
 use crate::color::ColorType;
 use crate::compress::deflate::deflate_zlib_packed;
+#[cfg(feature = "timing")]
+use crate::compress::deflate::{deflate_zlib_packed_with_stats, DeflateStats};
 use crate::error::{Error, Result};
 
 /// PNG file signature (magic bytes).
@@ -184,6 +186,57 @@ pub fn encode_into(
     write_iend(output);
 
     Ok(())
+}
+
+/// Encode raw pixel data as PNG into a caller-provided buffer, returning DEFLATE timing stats.
+///
+/// Only available when the `timing` feature is enabled. This mirrors `encode_into`
+/// but surfaces per-stage DEFLATE timings to aid profiling without external tools.
+#[cfg(feature = "timing")]
+pub fn encode_into_with_stats(
+    output: &mut Vec<u8>,
+    data: &[u8],
+    width: u32,
+    height: u32,
+    color_type: ColorType,
+    options: &PngOptions,
+) -> Result<DeflateStats> {
+    if !(1..=9).contains(&options.compression_level) {
+        return Err(Error::InvalidCompressionLevel(options.compression_level));
+    }
+
+    if width == 0 || height == 0 {
+        return Err(Error::InvalidDimensions { width, height });
+    }
+
+    if width > MAX_DIMENSION || height > MAX_DIMENSION {
+        return Err(Error::ImageTooLarge {
+            width,
+            height,
+            max: MAX_DIMENSION,
+        });
+    }
+
+    let bytes_per_pixel = color_type.bytes_per_pixel();
+    let expected_len = width as usize * height as usize * bytes_per_pixel;
+    if data.len() != expected_len {
+        return Err(Error::InvalidDataLength {
+            expected: expected_len,
+            actual: data.len(),
+        });
+    }
+
+    output.clear();
+    output.reserve(expected_len / 2 + 1024);
+    output.extend_from_slice(&PNG_SIGNATURE);
+    write_ihdr(output, width, height, color_type);
+
+    let filtered = filter::apply_filters(data, width, height, bytes_per_pixel, options);
+    let (compressed, stats) = deflate_zlib_packed_with_stats(&filtered, options.compression_level);
+    write_idat_chunks(output, &compressed);
+    write_iend(output);
+
+    Ok(stats)
 }
 
 /// Write IHDR (image header) chunk.

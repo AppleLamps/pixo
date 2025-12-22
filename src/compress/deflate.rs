@@ -294,6 +294,78 @@ pub fn deflate_packed(data: &[u8], level: u8) -> Vec<u8> {
     }
 }
 
+/// Compress data using DEFLATE algorithm with packed tokens, returning stats.
+#[cfg(feature = "timing")]
+pub fn deflate_packed_with_stats(data: &[u8], level: u8) -> (Vec<u8>, DeflateStats) {
+    if data.is_empty() {
+        let mut writer = BitWriter64::with_capacity(16);
+        writer.write_bits(1, 1); // BFINAL = 1
+        writer.write_bits(1, 2); // BTYPE = 01 (fixed Huffman)
+
+        let lit_codes = fixed_literal_codes_rev();
+        let (code, len) = lit_codes[256];
+        writer.write_bits(code, len);
+
+        return (
+            writer.finish(),
+            DeflateStats {
+                used_dynamic: false,
+                ..Default::default()
+            },
+        );
+    }
+
+    let t0 = Instant::now();
+    let mut lz77 = Lz77Compressor::new(level);
+    let tokens = lz77.compress_packed(data);
+    let lz77_time = t0.elapsed();
+
+    let (literal_count, match_count) = token_counts_packed(&tokens);
+
+    let est_bytes = estimated_deflate_size(data.len(), level);
+
+    let t1 = Instant::now();
+    let fixed = encode_fixed_huffman_packed_with_capacity(&tokens, est_bytes);
+    let fixed_time = t1.elapsed();
+
+    let t2 = Instant::now();
+    let dynamic = encode_dynamic_huffman_packed_with_capacity(&tokens, est_bytes);
+    let dynamic_time = t2.elapsed();
+
+    let choose_start = Instant::now();
+    let use_dynamic = dynamic.len() < fixed.len();
+    let encoded = if use_dynamic { dynamic } else { fixed };
+    let choose_time = choose_start.elapsed();
+
+    let stats = DeflateStats {
+        lz77_time,
+        fixed_huffman_time: fixed_time,
+        dynamic_huffman_time: dynamic_time,
+        choose_time,
+        token_count: tokens.len(),
+        literal_count,
+        match_count,
+        used_dynamic: use_dynamic,
+        used_stored_block: false,
+    };
+
+    (encoded, stats)
+}
+
+#[cfg(feature = "timing")]
+fn token_counts_packed(tokens: &[PackedToken]) -> (usize, usize) {
+    let mut literal_count = 0;
+    let mut match_count = 0;
+    for t in tokens {
+        if t.is_literal() {
+            literal_count += 1;
+        } else {
+            match_count += 1;
+        }
+    }
+    (literal_count, match_count)
+}
+
 /// Reusable DEFLATE encoder that minimizes allocations by reusing buffers.
 pub struct Deflater {
     level: u8,
@@ -598,6 +670,39 @@ pub fn deflate_zlib_with_stats(data: &[u8], level: u8) -> (Vec<u8>, DeflateStats
     }
 
     let (deflated, mut stats) = deflate_with_stats(data, level);
+
+    let use_stored = should_use_stored(data.len(), deflated.len());
+    let mut output = Vec::with_capacity(deflated.len().min(data.len()) + 32);
+    output.extend_from_slice(&zlib_header(level));
+
+    if use_stored {
+        let stored_blocks = deflate_stored(data);
+        output.extend_from_slice(&stored_blocks);
+    } else {
+        output.extend_from_slice(&deflated);
+    }
+
+    output.extend_from_slice(&adler32(data).to_be_bytes());
+
+    stats.used_stored_block = use_stored;
+    (output, stats)
+}
+
+/// Compress data with packed tokens into a zlib container, returning stats.
+#[cfg(feature = "timing")]
+pub fn deflate_zlib_packed_with_stats(data: &[u8], level: u8) -> (Vec<u8>, DeflateStats) {
+    if data.is_empty() {
+        let mut output = Vec::with_capacity(8);
+        output.extend_from_slice(&zlib_header(level));
+
+        let (deflated, mut stats) = deflate_packed_with_stats(data, level);
+        output.extend_from_slice(&deflated);
+        output.extend_from_slice(&adler32(data).to_be_bytes());
+        stats.used_stored_block = false;
+        return (output, stats);
+    }
+
+    let (deflated, mut stats) = deflate_packed_with_stats(data, level);
 
     let use_stored = should_use_stored(data.len(), deflated.len());
     let mut output = Vec::with_capacity(deflated.len().min(data.len()) + 32);
