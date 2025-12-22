@@ -78,6 +78,12 @@
 		return { ...defaultOptions };
 	}
 
+	$: completedJobs = jobs.filter((j) => j.result);
+	$: totalOriginal = completedJobs.reduce((sum, j) => sum + j.size, 0);
+	$: totalCompressed = completedJobs.reduce((sum, j) => sum + (j.result?.size ?? 0), 0);
+	$: totalSavingsPct =
+		totalOriginal > 0 ? ((totalOriginal - totalCompressed) / totalOriginal) * 100 : 0;
+
 	const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
 	const ctx = canvas ? canvas.getContext('2d', { willReadFrequently: true }) : null;
 
@@ -304,6 +310,31 @@ function detectAlpha(data: Uint8ClampedArray) {
 			</div>
 		</div>
 	</section>
+
+	{#if completedJobs.length > 0}
+		<section class="card flex flex-wrap items-center justify-between gap-4 p-5 text-sm text-slate-200">
+			<div class="space-y-1">
+				<p class="text-xs uppercase tracking-[0.15em] text-slate-500">Summary</p>
+				<p class="text-lg font-semibold text-slate-50">
+					{completedJobs.length} optimized · {formatSavings(totalSavingsPct)} overall
+				</p>
+			</div>
+			<div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+				<div class="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+					<p class="text-xs text-slate-500">Original size</p>
+					<p class="text-base font-semibold text-slate-50">{formatBytes(totalOriginal)}</p>
+				</div>
+				<div class="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+					<p class="text-xs text-slate-500">Compressed</p>
+					<p class="text-base font-semibold text-slate-50">{formatBytes(totalCompressed)}</p>
+				</div>
+				<div class="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+					<p class="text-xs text-slate-500">Savings</p>
+					<p class="text-base font-semibold text-emerald-300">{formatSavings(totalSavingsPct)}</p>
+				</div>
+			</div>
+		</section>
+	{/if}
 
 	{#if jobs.length === 0}
 		<div class="card p-6 text-slate-300">
