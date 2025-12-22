@@ -55,3 +55,10 @@ harness = false
 [[bench]]
 name = "components"
 harness = false
+
+[profile.release]
+lto = true              # Link-time optimization (merges all code, removes unused)
+opt-level = "z"         # Optimize for size
+codegen-units = 1       # Single codegen unit for better optimization
+panic = "abort"         # Remove unwinding code
+strip = true            # Strip symbols from binary

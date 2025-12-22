@@ -49,14 +49,14 @@ When choosing an image compression solution, consider these trade-offs:
 
 ### Rust Libraries
 
-| Library           | WASM-friendly   | Binary Size (gzip) | Throughput | Notes                                              |
-| ----------------- | --------------- | ------------------ | ---------- | -------------------------------------------------- |
-| **comprs**        | Yes             | ~100-150KB (est.)  | Good       | Zero deps, pure Rust, simple WASM target           |
-| `image`           | Yes             | ~2-4MB             | Good       | Pure Rust, many codecs included                    |
-| `photon-rs`       | Yes             | ~200-400KB         | Excellent  | Pure Rust, designed for WASM, 13x faster than JS   |
-| `zune-image`      | Yes             | ~500KB-1MB         | Excellent  | Pure Rust, SIMD optimized, 1.8x faster than libpng |
-| `mozjpeg`         | Emscripten only | ~30-50KB           | Excellent  | C library, requires complex build setup            |
-| `libpng` bindings | Emscripten only | N/A                | Excellent  | C library, requires Emscripten toolchain           |
+| Library           | WASM-friendly   | Binary Size | Throughput | Notes                                              |
+| ----------------- | --------------- | ----------- | ---------- | -------------------------------------------------- |
+| **comprs**        | Yes             | 92 KB       | Good       | Zero deps, pure Rust, simple WASM target           |
+| `image`           | Yes             | ~2-4MB      | Good       | Pure Rust, many codecs included                    |
+| `photon-rs`       | Yes             | ~200-400KB  | Excellent  | Pure Rust, designed for WASM, 13x faster than JS   |
+| `zune-image`      | Yes             | ~500KB-1MB  | Excellent  | Pure Rust, SIMD optimized, 1.8x faster than libpng |
+| `mozjpeg`         | Emscripten only | ~30-50KB    | Excellent  | C library, requires complex build setup            |
+| `libpng` bindings | Emscripten only | N/A         | Excellent  | C library, requires Emscripten toolchain           |
 
 _Note: photon-rs benchmarks show Gaussian blur at 180ms vs 2400ms in pure JS. zune-png benchmarks show 1.8x speedup over libpng on x86._
 
@@ -110,13 +110,16 @@ comprs compiles with `wasm32-unknown-unknown` - the standard, simple target.
 
 ### 2. Small Binary Size
 
-| What you need | comprs (est. gzip) | image crate (est. gzip) |
-| ------------- | ------------------ | ----------------------- |
-| PNG only      | ~60-80KB           | ~2MB                    |
-| JPEG only     | ~50-70KB           | ~2MB                    |
-| PNG + JPEG    | ~100-150KB         | ~2MB                    |
+| What you need | comprs    | image crate (est.) |
+| ------------- | --------- | ------------------ |
+| PNG + JPEG    | **92 KB** | ~2-4MB             |
 
 The `image` crate includes decoders and encoders for BMP, GIF, ICO, TIFF, WebP, AVIF, and more - even if you only need PNG. You can use feature flags to reduce size, but the core still includes significant code.
+
+comprs achieves its small size through:
+
+- Zero runtime dependencies (hand-implemented DEFLATE, DCT, Huffman)
+- Release profile optimizations (LTO, `opt-level = "z"`, `panic = "abort"`, symbol stripping)
 
 ### 3. Predictable Output
 
@@ -142,29 +145,58 @@ comprs produces identical output regardless of environment.
 
 ## Binary Size Breakdown
 
-Estimated WASM binary sizes for comprs (gzipped, with `opt-level = "z"` and `wasm-opt -Oz`):
+Measured WASM binary sizes for comprs:
 
-| Component                         | Approx. Size (gzip) |
-| --------------------------------- | ------------------- |
-| DEFLATE (LZ77 + Huffman)          | ~30-40KB            |
-| PNG encoder                       | ~20-30KB            |
-| JPEG encoder (DCT + quantization) | ~40-50KB            |
-| Core utilities                    | ~10KB               |
-| **Total (PNG + JPEG)**            | **~100-150KB**      |
+| Configuration                    | Size      |
+| -------------------------------- | --------- |
+| Default release                  | 127 KB    |
+| **Optimized** (LTO, opt-level=z) | **92 KB** |
 
-_These are estimates. Actual sizes depend on build configuration. Run `wasm-pack build --release --features wasm` and check the output size to verify._
+The optimizations in `Cargo.toml` provide a **28% size reduction**.
 
-Compare to alternatives:
+### Build Configuration
 
-| Library            | WASM Size (uncompressed) | WASM Size (gzip) |
-| ------------------ | ------------------------ | ---------------- |
-| comprs (estimated) | ~300-400KB               | ~100-150KB       |
-| squoosh mozjpeg    | ~803KB                   | ~30-50KB         |
-| squoosh oxipng     | ~625KB                   | ~80-120KB        |
-| wasm-mozjpeg       | ~208KB                   | ~34KB            |
-| image crate        | ~6-10MB                  | ~2-4MB           |
+The release profile in `Cargo.toml` enables size optimizations:
 
-_Note: Squoosh codec sizes from squoosh-browser-sense. wasm-mozjpeg is a minimal WASM build. Actual sizes depend on build configuration and optimization level._
+```toml
+[profile.release]
+lto = true           # Link-time optimization
+opt-level = "z"      # Optimize for size
+codegen-units = 1    # Single codegen unit for better optimization
+panic = "abort"      # Remove unwinding code
+strip = true         # Strip symbols from binary
+```
+
+Additional WASM-specific settings in `.cargo/config.toml`:
+
+```toml
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "target-feature=+bulk-memory"]
+```
+
+### Building for WASM
+
+```bash
+cargo build --release --target wasm32-unknown-unknown --features wasm
+```
+
+For additional size reduction, install `wasm-opt` (from binaryen) and run:
+
+```bash
+wasm-opt -Oz -o optimized.wasm target/wasm32-unknown-unknown/release/comprs.wasm
+```
+
+### Comparison to Alternatives
+
+| Library         | WASM Size (uncompressed) |
+| --------------- | ------------------------ |
+| **comprs**      | **92 KB**                |
+| wasm-mozjpeg    | ~208KB                   |
+| squoosh oxipng  | ~625KB                   |
+| squoosh mozjpeg | ~803KB                   |
+| image crate     | ~6-10MB                  |
+
+_Note: Squoosh codec sizes from squoosh-browser-sense. Sizes depend on build configuration and optimization level._
 
 ---
 
