@@ -122,48 +122,84 @@ fn extract_lengths(node: &Node, depth: u8, lengths: &mut [u8]) {
     }
 }
 
-/// Limit code lengths to max_length using the package-merge algorithm approximation.
+/// Limit code lengths to max_length using a simple redistribution algorithm.
+///
+/// This ensures the Huffman tree is complete (Kraft sum equals 2^max_length).
 fn limit_code_lengths(lengths: &mut [u8], max_length: usize) {
     let max_length = max_length as u8;
 
     // Check if any codes exceed max length
-    let overflow: u32 = lengths
-        .iter()
-        .filter(|&&l| l > max_length)
-        .map(|&l| 1u32 << (l - max_length))
-        .sum();
+    let has_overflow = lengths.iter().any(|&l| l > max_length);
 
-    if overflow == 0 {
+    if !has_overflow {
         return;
     }
 
-    // Truncate long codes
+    // Truncate long codes to max_length
     for length in lengths.iter_mut() {
         if *length > max_length {
             *length = max_length;
         }
     }
 
-    // Redistribute using Kraft inequality
-    // This is a simplified approach - proper package-merge would be more optimal
+    // Calculate current Kraft sum
+    let kraft_limit = 1u32 << max_length;
     let mut kraft_sum: u32 = lengths
         .iter()
         .filter(|&&l| l > 0)
         .map(|&l| 1u32 << (max_length as u32 - l as u32))
         .sum();
 
-    let kraft_limit = 1u32 << max_length;
-
-    // If we're over the limit, we need to make some codes longer
+    // If over-subscribed, make some codes longer until we're at or under the limit
     while kraft_sum > kraft_limit {
-        // Find the shortest code and make it longer
-        for length in lengths.iter_mut() {
-            if *length > 0 && *length < max_length {
-                kraft_sum -= 1u32 << (max_length as u32 - *length as u32);
-                *length += 1;
-                kraft_sum += 1u32 << (max_length as u32 - *length as u32);
+        // Find the shortest non-zero code that can be made longer
+        let mut best_idx = None;
+        let mut best_len = max_length;
+        for (i, &len) in lengths.iter().enumerate() {
+            if len > 0 && len < max_length && len < best_len {
+                best_len = len;
+                best_idx = Some(i);
+            }
+        }
+
+        if let Some(idx) = best_idx {
+            kraft_sum -= 1u32 << (max_length as u32 - lengths[idx] as u32);
+            lengths[idx] += 1;
+            kraft_sum += 1u32 << (max_length as u32 - lengths[idx] as u32);
+        } else {
+            // All codes are already at max_length, can't fix
+            break;
+        }
+    }
+
+    // If under-subscribed, make some codes shorter to fill the gap
+    // We do this by finding codes at max_length and reducing them
+    while kraft_sum < kraft_limit {
+        // Find a code at the longest length that can be made shorter
+        let mut best_idx = None;
+        let mut best_len = 0u8;
+        for (i, &len) in lengths.iter().enumerate() {
+            if len > 1 && len > best_len {
+                best_len = len;
+                best_idx = Some(i);
+            }
+        }
+
+        if let Some(idx) = best_idx {
+            let old_contribution = 1u32 << (max_length as u32 - lengths[idx] as u32);
+            let new_contribution = 1u32 << (max_length as u32 - (lengths[idx] - 1) as u32);
+
+            // Check if making this code shorter would overshoot
+            if kraft_sum - old_contribution + new_contribution <= kraft_limit {
+                kraft_sum -= old_contribution;
+                lengths[idx] -= 1;
+                kraft_sum += new_contribution;
+            } else {
+                // Can't shorten without overshooting, we're done
                 break;
             }
+        } else {
+            break;
         }
     }
 }

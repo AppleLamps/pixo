@@ -191,14 +191,12 @@ pub fn deflate(data: &[u8], level: u8) -> Vec<u8> {
 
     // Choose between fixed and dynamic Huffman based on output size.
     let fixed = encode_fixed_huffman_with_capacity(&tokens, est_bytes);
-    // TODO: Dynamic Huffman has bugs with larger data - always use fixed for now
-    // let dynamic = encode_dynamic_huffman_with_capacity(&tokens, est_bytes);
-    // if dynamic.len() < fixed.len() {
-    //     dynamic
-    // } else {
-    //     fixed
-    // }
-    fixed
+    let dynamic = encode_dynamic_huffman_with_capacity(&tokens, est_bytes);
+    if dynamic.len() < fixed.len() {
+        dynamic
+    } else {
+        fixed
+    }
 }
 
 /// Compress data using DEFLATE algorithm with packed tokens (non-reusable).
@@ -228,8 +226,12 @@ pub fn deflate_packed(data: &[u8], level: u8) -> Vec<u8> {
 
     // Choose between fixed and dynamic Huffman based on output size.
     let fixed = encode_fixed_huffman_packed_with_capacity(&tokens, est_bytes);
-    // TODO: Dynamic Huffman has bugs with larger data - always use fixed for now
-    fixed
+    let dynamic = encode_dynamic_huffman_packed_with_capacity(&tokens, est_bytes);
+    if dynamic.len() < fixed.len() {
+        dynamic
+    } else {
+        fixed
+    }
 }
 
 /// Reusable DEFLATE encoder that minimizes allocations by reusing buffers.
@@ -273,8 +275,12 @@ impl Deflater {
 
         let est_bytes = estimated_deflate_size(data.len(), self.level);
         let fixed = encode_fixed_huffman_with_capacity(&self.tokens, est_bytes);
-        // TODO: Dynamic Huffman has bugs with larger data - always use fixed for now
-        fixed
+        let dynamic = encode_dynamic_huffman_with_capacity(&self.tokens, est_bytes);
+        if dynamic.len() < fixed.len() {
+            dynamic
+        } else {
+            fixed
+        }
     }
 
     /// Compress data and wrap in a zlib container.
@@ -302,8 +308,12 @@ impl Deflater {
         let est_bytes = estimated_deflate_size(data.len(), self.level);
         let deflated = {
             let fixed = encode_fixed_huffman_with_capacity(&self.tokens, est_bytes);
-            // TODO: Dynamic Huffman has bugs with larger data - always use fixed for now
-            fixed
+            let dynamic = encode_dynamic_huffman_with_capacity(&self.tokens, est_bytes);
+            if dynamic.len() < fixed.len() {
+                dynamic
+            } else {
+                fixed
+            }
         };
 
         let use_stored = should_use_stored(data.len(), deflated.len());
@@ -342,8 +352,12 @@ impl Deflater {
 
         let est_bytes = estimated_deflate_size(data.len(), self.level);
         let fixed = encode_fixed_huffman_packed_with_capacity(&self.packed_tokens, est_bytes);
-        // TODO: Dynamic Huffman has bugs with larger data - always use fixed for now
-        fixed
+        let dynamic = encode_dynamic_huffman_packed_with_capacity(&self.packed_tokens, est_bytes);
+        if dynamic.len() < fixed.len() {
+            dynamic
+        } else {
+            fixed
+        }
     }
 
     /// Compress data using packed tokens and wrap in a zlib container.
@@ -372,8 +386,12 @@ impl Deflater {
         let est_bytes = estimated_deflate_size(data.len(), self.level);
         let deflated = {
             let fixed = encode_fixed_huffman_packed_with_capacity(&self.packed_tokens, est_bytes);
-            // TODO: Dynamic Huffman has bugs with larger data - always use fixed for now
-            fixed
+            let dynamic = encode_dynamic_huffman_packed_with_capacity(&self.packed_tokens, est_bytes);
+            if dynamic.len() < fixed.len() {
+                dynamic
+            } else {
+                fixed
+            }
         };
 
         let use_stored = should_use_stored(data.len(), deflated.len());
