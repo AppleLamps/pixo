@@ -1,33 +1,84 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@font-face {
+	font-family: 'Berkeley Mono';
+	src: url('/BerkeleyMono-Regular.woff2') format('woff2');
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-	color-scheme: light;
+	color-scheme: dark;
+	--bg-primary: #0a0a0a;
+	--bg-surface: #111111;
+	--border: #2a2a2a;
+	--text-primary: #e5e5e5;
+	--text-muted: #666666;
+	--accent-green: #22c55e;
 }
 
 body {
-	@apply bg-slate-950 text-slate-50 min-h-screen antialiased;
+	@apply bg-surface-0 text-neutral-200 min-h-screen antialiased font-mono;
 }
 
-a {
-	@apply text-sky-300 hover:text-sky-200 transition-colors;
-}
-
-.card {
-	@apply bg-slate-900/70 border border-slate-800 rounded-2xl shadow-xl shadow-slate-950/40;
-}
-
-.btn {
-	@apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 font-semibold transition-colors;
-}
-
+/* Primary button - white background, black text */
 .btn-primary {
-	@apply btn bg-sky-500 text-slate-950 hover:bg-sky-400;
+	@apply inline-flex items-center justify-center gap-2 rounded px-4 py-2 text-sm font-medium transition-all;
+	@apply bg-white text-black hover:bg-neutral-200 active:bg-neutral-300;
 }
 
+/* Ghost/secondary button */
 .btn-ghost {
-	@apply btn bg-transparent text-slate-100 hover:bg-slate-800;
+	@apply inline-flex items-center justify-center gap-2 rounded px-3 py-1.5 text-sm font-medium transition-all;
+	@apply bg-transparent text-neutral-400 hover:text-neutral-200 hover:bg-surface-2;
+}
+
+/* Input/select styling */
+.input {
+	@apply bg-surface-1 border border-border text-neutral-200 rounded px-2 py-1 text-sm;
+	@apply focus:outline-none focus:border-neutral-500;
+}
+
+/* Range slider styling */
+input[type='range'] {
+	@apply appearance-none bg-transparent cursor-pointer h-6;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+	@apply h-1.5 rounded-full;
+	background: #444444;
+}
+
+input[type='range']::-webkit-slider-thumb {
+	@apply appearance-none w-3 h-3 bg-white rounded-full;
+	margin-top: -3px;
+}
+
+input[type='range']::-moz-range-track {
+	@apply h-1.5 rounded-full;
+	background: #444444;
+}
+
+input[type='range']::-moz-range-thumb {
+	@apply appearance-none w-3 h-3 bg-white rounded-full border-0;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+	@apply w-2;
+}
+
+::-webkit-scrollbar-track {
+	@apply bg-surface-0;
+}
+
+::-webkit-scrollbar-thumb {
+	@apply bg-surface-3 rounded;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	@apply bg-neutral-600;
 }

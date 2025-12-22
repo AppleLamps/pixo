@@ -82,7 +82,7 @@ export async function compressImage(imageData: ImageData, options: CompressOptio
 	}
 
 	const elapsedMs = performance.now() - t0;
-	const blob = new Blob([bytes], { type: mime });
+	const blob = new Blob([new Uint8Array(bytes)], { type: mime });
 	return { bytes, blob, elapsedMs };
 }
 
