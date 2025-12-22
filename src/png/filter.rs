@@ -60,15 +60,19 @@ pub fn apply_filters(
     let filtered_row_size = row_bytes + 1; // +1 for filter type byte
     let zero_row = vec![0u8; row_bytes];
 
+    // Height-aware strategy tweaks: for tall images, favor sampled adaptive to
+    // reduce per-row work while preserving quality.
+    let mut strategy = options.filter_strategy;
+    if matches!(strategy, FilterStrategy::AdaptiveFast) && height >= 512 {
+        strategy = FilterStrategy::AdaptiveSampled { interval: 4 };
+    }
+
     // Parallel path (only for adaptive; other strategies are trivial)
     #[cfg(feature = "parallel")]
     {
         // Parallel gains when rows are numerous; avoid overhead on tiny images.
         if height > 32
-            && matches!(
-                options.filter_strategy,
-                FilterStrategy::Adaptive | FilterStrategy::AdaptiveFast
-            )
+            && matches!(strategy, FilterStrategy::Adaptive | FilterStrategy::AdaptiveFast | FilterStrategy::AdaptiveSampled { .. })
         {
             return apply_filters_parallel(
                 data,
@@ -76,7 +80,7 @@ pub fn apply_filters(
                 row_bytes,
                 bytes_per_pixel,
                 filtered_row_size,
-                options.filter_strategy,
+                strategy,
             );
         }
     }
@@ -92,7 +96,7 @@ pub fn apply_filters(
     for y in 0..height as usize {
         let row_start = y * row_bytes;
         let row = &data[row_start..row_start + row_bytes];
-        match options.filter_strategy {
+        match strategy {
             FilterStrategy::AdaptiveSampled { interval } if interval > 1 => {
                 let interval = interval.max(1) as usize;
                 let prev = if y == 0 { &zero_row[..] } else { prev_row };
