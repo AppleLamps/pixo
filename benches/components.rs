@@ -1,7 +1,9 @@
 //! Component-level microbenchmarks for comprs.
 //! Focuses on LZ77, Huffman encoding, filtering, and checksums.
 
-use comprs::compress::deflate::{encode_dynamic_huffman, encode_fixed_huffman};
+use comprs::compress::deflate::{
+    deflate, deflate_packed, encode_dynamic_huffman, encode_fixed_huffman,
+};
 use comprs::compress::lz77::Lz77Compressor;
 use comprs::compress::{adler32, crc32};
 use comprs::png::filter::apply_filters;
@@ -191,6 +193,40 @@ fn bench_checksums(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_deflate_packed(c: &mut Criterion) {
+    let compressible = make_pattern(1 << 20);
+    let random = make_random(1 << 20, 0xCAFE_BABE);
+
+    let mut group = c.benchmark_group("deflate_vs_packed");
+    group.throughput(Throughput::Bytes(compressible.len() as u64));
+
+    group.bench_function("standard_compressible_level6", |b| {
+        b.iter(|| {
+            black_box(deflate(black_box(&compressible), 6));
+        });
+    });
+
+    group.bench_function("packed_compressible_level6", |b| {
+        b.iter(|| {
+            black_box(deflate_packed(black_box(&compressible), 6));
+        });
+    });
+
+    group.bench_function("standard_random_level6", |b| {
+        b.iter(|| {
+            black_box(deflate(black_box(&random), 6));
+        });
+    });
+
+    group.bench_function("packed_random_level6", |b| {
+        b.iter(|| {
+            black_box(deflate_packed(black_box(&random), 6));
+        });
+    });
+
+    group.finish();
+}
+
 fn bench_png_encode(c: &mut Criterion) {
     let width = 512;
     let height = 512;
@@ -217,6 +253,7 @@ criterion_group!(
     bench_huffman,
     bench_filters,
     bench_checksums,
+    bench_deflate_packed,
     bench_png_encode
 );
 criterion_main!(benches);
