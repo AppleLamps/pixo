@@ -575,73 +575,12 @@ pub fn deflate_with_stats(data: &[u8], level: u8) -> (Vec<u8>, DeflateStats) {
 ///
 /// Produces: zlib header (CMF/FLG), deflate stream, Adler-32 checksum.
 pub fn deflate_zlib(data: &[u8], level: u8) -> Vec<u8> {
-    // For empty input, keep the fixed-Huffman minimal block.
-    if data.is_empty() {
-        let mut output = Vec::with_capacity(8);
-        output.extend_from_slice(&zlib_header(level));
-        output.extend_from_slice(&deflate(data, level));
-        output.extend_from_slice(&adler32(data).to_be_bytes());
-        return output;
-    }
-
-    // Small inputs: skip dynamic Huffman selection to avoid double-encoding overhead.
-    let deflated = with_reusable_deflater(level, |d| {
-        if data.len() <= SMALL_INPUT_BYTES {
-            d.compress_fixed_only(data)
-        } else {
-            d.compress(data)
-        }
-    });
-
-    let use_stored = should_use_stored(data.len(), deflated.len());
-
-    let mut output = Vec::with_capacity(deflated.len().min(data.len()) + 32);
-    output.extend_from_slice(&zlib_header(level));
-
-    if use_stored {
-        let stored_blocks = deflate_stored(data);
-        output.extend_from_slice(&stored_blocks);
-    } else {
-        output.extend_from_slice(&deflated);
-    }
-
-    output.extend_from_slice(&adler32(data).to_be_bytes());
-    output
+    with_reusable_deflater(level, |d| d.compress_zlib(data))
 }
 
 /// Compress data with packed tokens and wrap it in a zlib container.
 pub fn deflate_zlib_packed(data: &[u8], level: u8) -> Vec<u8> {
-    // For empty input, keep the fixed-Huffman minimal block.
-    if data.is_empty() {
-        let mut output = Vec::with_capacity(8);
-        output.extend_from_slice(&zlib_header(level));
-        output.extend_from_slice(&deflate_packed(data, level));
-        output.extend_from_slice(&adler32(data).to_be_bytes());
-        return output;
-    }
-
-    let deflated = with_reusable_deflater(level, |d| {
-        if data.len() <= SMALL_INPUT_BYTES {
-            d.compress_fixed_only_packed(data)
-        } else {
-            d.compress_packed(data)
-        }
-    });
-
-    let use_stored = should_use_stored(data.len(), deflated.len());
-
-    let mut output = Vec::with_capacity(deflated.len().min(data.len()) + 32);
-    output.extend_from_slice(&zlib_header(level));
-
-    if use_stored {
-        let stored_blocks = deflate_stored(data);
-        output.extend_from_slice(&stored_blocks);
-    } else {
-        output.extend_from_slice(&deflated);
-    }
-
-    output.extend_from_slice(&adler32(data).to_be_bytes());
-    output
+    with_reusable_deflater(level, |d| d.compress_packed_zlib(data))
 }
 
 /// Compress data using DEFLATE in a zlib container, returning encoded bytes plus stats.
