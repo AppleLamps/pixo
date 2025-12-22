@@ -107,6 +107,8 @@ const DYNAMIC_ONLY_TOKEN_THRESHOLD: usize = 128;
 const FIXED_ONLY_TOKEN_THRESHOLD: usize = 128;
 /// Below this byte length, favor a simpler path and optionally skip dynamic Huffman.
 const SMALL_INPUT_BYTES: usize = 1 << 10; // 1 KiB
+/// Above this size and with high-entropy detection, skip LZ77/Huffman and emit stored blocks.
+const HIGH_ENTROPY_BAIL_BYTES: usize = 4 * 1024;
 /// When input has only literals (no matches) and meets this size, prefer stored blocks immediately.
 const STORED_LITERAL_ONLY_BYTES: usize = 8 * 1024;
 
@@ -682,12 +684,28 @@ pub fn deflate_with_stats(data: &[u8], level: u8) -> (Vec<u8>, DeflateStats) {
 ///
 /// Produces: zlib header (CMF/FLG), deflate stream, Adler-32 checksum.
 pub fn deflate_zlib(data: &[u8], level: u8) -> Vec<u8> {
+    if data.len() >= HIGH_ENTROPY_BAIL_BYTES && is_high_entropy_data(data) {
+        return deflate_zlib_stored(data, level);
+    }
     with_reusable_deflater(level, |d| d.compress_zlib(data))
 }
 
 /// Compress data with packed tokens and wrap it in a zlib container.
 pub fn deflate_zlib_packed(data: &[u8], level: u8) -> Vec<u8> {
+    if data.len() >= HIGH_ENTROPY_BAIL_BYTES && is_high_entropy_data(data) {
+        return deflate_zlib_stored(data, level);
+    }
     with_reusable_deflater(level, |d| d.compress_packed_zlib(data))
+}
+
+/// Emit zlib wrapper with stored (uncompressed) DEFLATE blocks.
+fn deflate_zlib_stored(data: &[u8], level: u8) -> Vec<u8> {
+    let mut output = Vec::with_capacity(data.len() + 16);
+    output.extend_from_slice(&zlib_header(level));
+    let stored_blocks = deflate_stored(data);
+    output.extend_from_slice(&stored_blocks);
+    output.extend_from_slice(&adler32(data).to_be_bytes());
+    output
 }
 
 /// Compress data using DEFLATE in a zlib container, returning encoded bytes plus stats.
@@ -701,6 +719,20 @@ pub fn deflate_zlib_with_stats(data: &[u8], level: u8) -> (Vec<u8>, DeflateStats
         output.extend_from_slice(&deflated);
         output.extend_from_slice(&adler32(data).to_be_bytes());
         stats.used_stored_block = false;
+        return (output, stats);
+    }
+
+    // High-entropy fast path: skip LZ77/Huffman and emit stored blocks directly.
+    if data.len() >= HIGH_ENTROPY_BAIL_BYTES && is_high_entropy_data(data) {
+        let mut output = Vec::with_capacity(data.len() + 16);
+        output.extend_from_slice(&zlib_header(level));
+        let stored_blocks = deflate_stored(data);
+        output.extend_from_slice(&stored_blocks);
+        output.extend_from_slice(&adler32(data).to_be_bytes());
+        let stats = DeflateStats {
+            used_stored_block: true,
+            ..Default::default()
+        };
         return (output, stats);
     }
 
@@ -737,6 +769,19 @@ pub fn deflate_zlib_packed_with_stats(data: &[u8], level: u8) -> (Vec<u8>, Defla
         return (output, stats);
     }
 
+    if data.len() >= HIGH_ENTROPY_BAIL_BYTES && is_high_entropy_data(data) {
+        let mut output = Vec::with_capacity(data.len() + 16);
+        output.extend_from_slice(&zlib_header(level));
+        let stored_blocks = deflate_stored(data);
+        output.extend_from_slice(&stored_blocks);
+        output.extend_from_slice(&adler32(data).to_be_bytes());
+        let stats = DeflateStats {
+            used_stored_block: true,
+            ..Default::default()
+        };
+        return (output, stats);
+    }
+
     let (deflated, mut stats) = deflate_packed_with_stats(data, level);
 
     let use_stored = should_use_stored(data.len(), deflated.len());
@@ -763,6 +808,33 @@ fn should_use_stored(data_len: usize, deflated_len: usize) -> bool {
     let stored_total = data_len + stored_overhead + 2 /*zlib hdr*/ + 4 /*adler*/;
     let deflated_total = deflated_len + 2 /*zlib hdr*/ + 4 /*adler*/;
     deflated_total >= stored_total
+}
+
+/// Detect high-entropy (likely incompressible) data by sampling neighboring deltas.
+/// Similar to the PNG filter heuristic: few equal neighbors and no dominant delta.
+fn is_high_entropy_data(data: &[u8]) -> bool {
+    if data.len() < 1024 {
+        return false;
+    }
+    let mut equal_neighbors = 0usize;
+    let mut delta_hist = [0u32; 256];
+    let mut total_deltas = 0usize;
+    for w in data.windows(2) {
+        if w[0] == w[1] {
+            equal_neighbors += 1;
+        }
+        let delta = w[1].wrapping_sub(w[0]);
+        delta_hist[delta as usize] += 1;
+        total_deltas += 1;
+    }
+    let ratio = equal_neighbors as f32 / (data.len().saturating_sub(1) as f32);
+    let max_delta = delta_hist.iter().copied().max().unwrap_or(0);
+    let max_delta_ratio = if total_deltas == 0 {
+        1.0
+    } else {
+        max_delta as f32 / total_deltas as f32
+    };
+    ratio < 0.01 && max_delta_ratio < 0.10
 }
 
 /// Encode tokens using fixed Huffman codes.
