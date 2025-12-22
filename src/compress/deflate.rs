@@ -103,6 +103,8 @@ const LENGTH_LOOKUP: [(u8, u8); 256] = {
 /// straight to dynamic codes to avoid double-encoding overhead on large
 /// payloads (common for PNG scanlines).
 const DYNAMIC_ONLY_TOKEN_THRESHOLD: usize = 1024;
+/// Below this byte length, favor a simpler path and optionally skip dynamic Huffman.
+const SMALL_INPUT_BYTES: usize = 1 << 10; // 1 KiB
 
 thread_local! {
     /// Thread-local pool of reusable deflaters keyed by compression level.
@@ -321,6 +323,29 @@ impl Deflater {
         encoded
     }
 
+    /// Compress using only fixed Huffman codes (for very small inputs).
+    pub fn compress_fixed_only(&mut self, data: &[u8]) -> Vec<u8> {
+        if data.is_empty() {
+            let mut writer = BitWriter64::with_capacity(16);
+            writer.write_bits(1, 1); // BFINAL = 1
+            writer.write_bits(1, 2); // BTYPE = 01 (fixed Huffman)
+
+            // Write end-of-block symbol (256)
+            let lit_codes = huffman::fixed_literal_codes();
+            let code = lit_codes[256];
+            writer.write_bits(reverse_bits(code.code, code.length), code.length);
+
+            return writer.finish();
+        }
+
+        self.tokens.clear();
+        self.tokens.reserve(data.len());
+        self.lz77.compress_into(data, &mut self.tokens);
+
+        let est_bytes = estimated_deflate_size(data.len(), self.level);
+        encode_fixed_huffman_with_capacity(&self.tokens, est_bytes)
+    }
+
     /// Compress data and wrap in a zlib container.
     pub fn compress_zlib(&mut self, data: &[u8]) -> Vec<u8> {
         if data.is_empty() {
@@ -383,6 +408,27 @@ impl Deflater {
         let est_bytes = estimated_deflate_size(data.len(), self.level);
         let (encoded, _) = encode_best_huffman_packed(&self.packed_tokens, est_bytes);
         encoded
+    }
+
+    /// Compress using only fixed Huffman codes (packed) for very small inputs.
+    pub fn compress_fixed_only_packed(&mut self, data: &[u8]) -> Vec<u8> {
+        if data.is_empty() {
+            let mut writer = BitWriter64::with_capacity(16);
+            writer.write_bits(1, 1); // BFINAL = 1
+            writer.write_bits(1, 2); // BTYPE = 01 (fixed Huffman)
+
+            let (code, len) = fixed_literal_codes_rev()[256];
+            writer.write_bits(code, len);
+            return writer.finish();
+        }
+
+        self.packed_tokens.clear();
+        self.packed_tokens.reserve(data.len());
+        self.lz77
+            .compress_packed_into(data, &mut self.packed_tokens);
+
+        let est_bytes = estimated_deflate_size(data.len(), self.level);
+        encode_fixed_huffman_packed_with_capacity(&self.packed_tokens, est_bytes)
     }
 
     /// Compress data using packed tokens and wrap in a zlib container.
@@ -517,7 +563,12 @@ pub fn deflate_zlib(data: &[u8], level: u8) -> Vec<u8> {
         return output;
     }
 
-    let deflated = deflate(data, level);
+    // Small inputs: skip dynamic Huffman selection to avoid double-encoding overhead.
+    let deflated = if data.len() <= SMALL_INPUT_BYTES {
+        with_reusable_deflater(level, |d| d.compress_fixed_only(data))
+    } else {
+        deflate(data, level)
+    };
 
     let use_stored = should_use_stored(data.len(), deflated.len());
 
@@ -546,7 +597,11 @@ pub fn deflate_zlib_packed(data: &[u8], level: u8) -> Vec<u8> {
         return output;
     }
 
-    let deflated = deflate_packed(data, level);
+    let deflated = if data.len() <= SMALL_INPUT_BYTES {
+        with_reusable_deflater(level, |d| d.compress_fixed_only_packed(data))
+    } else {
+        deflate_packed(data, level)
+    };
 
     let use_stored = should_use_stored(data.len(), deflated.len());
 
