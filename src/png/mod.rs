@@ -27,6 +27,8 @@ pub struct PngOptions {
     /// If true, zero out color channels for fully transparent pixels to improve compressibility.
     /// Only applies to color types with alpha (RGBA, GrayAlpha).
     pub optimize_alpha: bool,
+    /// If true, attempt to reduce color type (e.g., RGB→Gray, RGBA→RGB/GrayAlpha) when lossless-safe.
+    pub reduce_color_type: bool,
 }
 
 impl Default for PngOptions {
@@ -37,6 +39,7 @@ impl Default for PngOptions {
             // AdaptiveFast reduces per-row work with minimal compression impact.
             filter_strategy: FilterStrategy::AdaptiveFast,
             optimize_alpha: false,
+            reduce_color_type: false,
         }
     }
 }
@@ -48,6 +51,7 @@ impl PngOptions {
             compression_level: 2,
             filter_strategy: FilterStrategy::AdaptiveFast,
             optimize_alpha: false,
+            reduce_color_type: false,
         }
     }
 
@@ -57,6 +61,7 @@ impl PngOptions {
             compression_level: 6,
             filter_strategy: FilterStrategy::Adaptive,
             optimize_alpha: false,
+            reduce_color_type: false,
         }
     }
 
@@ -66,6 +71,7 @@ impl PngOptions {
             compression_level: 9,
             filter_strategy: FilterStrategy::AdaptiveSampled { interval: 2 },
             optimize_alpha: false,
+            reduce_color_type: false,
         }
     }
 }
@@ -179,11 +185,16 @@ pub fn encode_into(
     // Write PNG signature
     output.extend_from_slice(&PNG_SIGNATURE);
 
+    // Optionally reduce color type (e.g., drop alpha or convert to grayscale) before encoding.
+    let (data, color_type) =
+        maybe_reduce_color_type(data, width as usize, height as usize, color_type, options);
+    let bytes_per_pixel = color_type.bytes_per_pixel();
+
     // Write IHDR chunk
     write_ihdr(output, width, height, color_type);
 
     // Apply filtering and compression
-    let data = maybe_optimize_alpha(data, color_type, options.optimize_alpha);
+    let data = maybe_optimize_alpha(&data, color_type, options.optimize_alpha);
 
     let filtered = filter::apply_filters(&data, width, height, bytes_per_pixel, options);
     let compressed = deflate_zlib_packed(&filtered, options.compression_level);
@@ -332,6 +343,90 @@ fn maybe_optimize_alpha<'a>(
     std::borrow::Cow::Owned(out)
 }
 
+/// Optionally reduce color type when lossless-safe:
+/// - RGBA with all alpha=255 -> RGB
+/// - RGBA where R==G==B for all pixels -> GrayAlpha (or Gray if alpha all 255)
+/// - RGB where R==G==B for all pixels -> Gray
+fn maybe_reduce_color_type<'a>(
+    data: &'a [u8],
+    width: usize,
+    height: usize,
+    color_type: ColorType,
+    options: &PngOptions,
+) -> (std::borrow::Cow<'a, [u8]>, ColorType) {
+    if !options.reduce_color_type {
+        return (std::borrow::Cow::Borrowed(data), color_type);
+    }
+
+    match color_type {
+        ColorType::Rgb => {
+            if all_gray_rgb(data) {
+                let mut gray = Vec::with_capacity(width * height);
+                for chunk in data.chunks_exact(3) {
+                    gray.push(chunk[0]);
+                }
+                return (std::borrow::Cow::Owned(gray), ColorType::Gray);
+            }
+        }
+        ColorType::Rgba => {
+            let (all_opaque, all_gray) = analyze_rgba(data);
+            if all_opaque && all_gray {
+                // Can drop alpha and use Gray
+                let mut gray = Vec::with_capacity(width * height);
+                for chunk in data.chunks_exact(4) {
+                    gray.push(chunk[0]);
+                }
+                return (std::borrow::Cow::Owned(gray), ColorType::Gray);
+            } else if all_opaque {
+                // Drop alpha, keep RGB
+                let mut rgb = Vec::with_capacity(width * height * 3);
+                for chunk in data.chunks_exact(4) {
+                    rgb.extend_from_slice(&chunk[..3]);
+                }
+                return (std::borrow::Cow::Owned(rgb), ColorType::Rgb);
+            } else if all_gray {
+                // Preserve alpha, convert to GrayAlpha
+                let mut ga = Vec::with_capacity(width * height * 2);
+                for chunk in data.chunks_exact(4) {
+                    ga.push(chunk[0]);
+                    ga.push(chunk[3]);
+                }
+                return (std::borrow::Cow::Owned(ga), ColorType::GrayAlpha);
+            }
+        }
+        _ => {}
+    }
+
+    (std::borrow::Cow::Borrowed(data), color_type)
+}
+
+fn all_gray_rgb(data: &[u8]) -> bool {
+    for chunk in data.chunks_exact(3) {
+        if !(chunk[0] == chunk[1] && chunk[1] == chunk[2]) {
+            return false;
+        }
+    }
+    true
+}
+
+fn analyze_rgba(data: &[u8]) -> (bool, bool) {
+    let mut all_opaque = true;
+    let mut all_gray = true;
+    for chunk in data.chunks_exact(4) {
+        let a = chunk[3];
+        if a != 255 {
+            all_opaque = false;
+        }
+        if !(chunk[0] == chunk[1] && chunk[1] == chunk[2]) {
+            all_gray = false;
+        }
+        if !all_opaque && !all_gray {
+            break;
+        }
+    }
+    (all_opaque, all_gray)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -418,6 +513,54 @@ mod tests {
             &[0, 0, 0, 0, 1, 2, 3, 255],
             "color channels should be zeroed when alpha is 0"
         );
+    }
+
+    #[test]
+    fn test_reduce_color_rgb_to_gray() {
+        // All channels equal -> reducible to Gray
+        let pixels = vec![
+            10, 10, 10, //
+            50, 50, 50, //
+        ];
+        let opts = PngOptions {
+            reduce_color_type: true,
+            ..Default::default()
+        };
+        let (out, ct) = maybe_reduce_color_type(&pixels, 2, 1, ColorType::Rgb, &opts);
+        assert!(matches!(ct, ColorType::Gray));
+        assert_eq!(&out[..], &[10, 50]);
+    }
+
+    #[test]
+    fn test_reduce_color_rgba_drop_alpha() {
+        // Opaque RGBA should drop alpha to RGB
+        let pixels = vec![
+            1, 2, 3, 255, //
+            4, 5, 6, 255, //
+        ];
+        let opts = PngOptions {
+            reduce_color_type: true,
+            ..Default::default()
+        };
+        let (out, ct) = maybe_reduce_color_type(&pixels, 2, 1, ColorType::Rgba, &opts);
+        assert!(matches!(ct, ColorType::Rgb));
+        assert_eq!(&out[..], &[1, 2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn test_reduce_color_rgba_to_grayalpha() {
+        // Grayscale RGBA with varying alpha -> GrayAlpha
+        let pixels = vec![
+            8, 8, 8, 10, //
+            9, 9, 9, 0, //
+        ];
+        let opts = PngOptions {
+            reduce_color_type: true,
+            ..Default::default()
+        };
+        let (out, ct) = maybe_reduce_color_type(&pixels, 2, 1, ColorType::Rgba, &opts);
+        assert!(matches!(ct, ColorType::GrayAlpha));
+        assert_eq!(&out[..], &[8, 10, 9, 0]);
     }
 
     #[test]
