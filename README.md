@@ -253,36 +253,19 @@ cargo bench --bench encode_benchmark
 cargo bench --bench deflate_micro
 ```
 
-### External codec harness
+### Comprehensive comparison
 
-Compare `comprs` against oxipng/mozjpeg on fixtures:
+Compare `comprs` against oxipng, mozjpeg, and other tools:
 
 ```bash
-# Build required examples
-cargo test --examples codec_harness
-# Run on default fixtures (tests/fixtures)
-cargo run --release --example codec_harness
+# Run comprehensive comparison with summary table
+cargo bench --bench comparison -- --summary-only
 
-# Override fixture directory or external binaries
-FIXTURES=path/to/images \
-OXIPNG_BIN=vendor/oxipng/target/release/oxipng \
-MOZJPEG_CJPEG=vendor/mozjpeg/build/cjpeg \
-cargo run --release --example codec_harness
-
-# Drive comprs PNG options via env (examples):
-COMPRS_PNG_PRESET=level4 \
-COMPRS_PNG_FILTER=brute \
-COMPRS_PNG_LEVEL=9 \
-cargo run --release --example codec_harness
-
-# Drive JPEG options via env (examples):
-COMPRS_JPEG_OPTIMIZE_HUFFMAN=true \
-COMPRS_JPEG_SUBSAMPLING=s420 \
-COMPRS_JPEG_RESTART=4 \
-cargo run --release --example codec_harness
+# Full benchmark with Criterion statistics
+cargo bench --bench comparison
 ```
 
-The harness prints PNG/JPEG sizes, timings, chosen comprs PNG options, and percentage deltas versus oxipng/mozjpeg when available.
+For detailed benchmark results and library comparisons, see [benches/BENCHMARKS.md](benches/BENCHMARKS.md).
 
 ## Testing
 

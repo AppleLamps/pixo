@@ -35,7 +35,7 @@ This documentation is designed to be accessible to developers who may not be fam
 |----------|-------------|
 | [Performance Optimization](./performance-optimization.md) | Techniques for high-performance compression code |
 | [Compression Evolution](./compression-evolution.md) | History and philosophy of compression improvements |
-| [Gap Report](./gap-report-baseline.md) | Benchmark comparison with oxipng/mozjpeg |
+| [Benchmarks](../benches/BENCHMARKS.md) | Comprehensive comparison with oxipng, mozjpeg, and other tools |
 
 ## 🎯 Learning Path
 

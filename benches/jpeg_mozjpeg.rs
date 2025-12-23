@@ -37,17 +37,12 @@ struct TestImage {
 fn load_test_images() -> Vec<TestImage> {
     let mut images = Vec::new();
 
-    // Load images from tests/fixtures/ directory
+    // Load JPEG images from tests/fixtures/ directory
     let fixtures = [
         ("multi-agent", "tests/fixtures/multi-agent.jpg"),
-        ("rocket", "tests/fixtures/rocket.png"),
-        ("playground", "tests/fixtures/playground.png"),
-        (
-            "squoosh_example",
-            "tests/fixtures/reference/squoosh_example.png",
-        ),
-        // Skip palette images - they're not representative of JPEG use cases
-        // ("squoosh_palette", "tests/fixtures/reference/squoosh_example_palette.png"),
+        ("browser", "tests/fixtures/browser.jpg"),
+        ("review", "tests/fixtures/review.jpg"),
+        ("web", "tests/fixtures/web.jpg"),
     ];
 
     for (name, path) in fixtures {
