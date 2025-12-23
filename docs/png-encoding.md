@@ -400,7 +400,11 @@ pub enum FilterStrategy {
     Up,       // Always use Up filter
     Average,  // Always use Average filter
     Paeth,    // Always use Paeth filter
-    Entropy,  // Choose best per row using entropy scoring
+    MinSum,   // Sum-of-abs scoring (oxipng-style)
+    Entropy,  // Entropy-scored per-row choice
+    Bigrams,  // Bigram entropy scoring
+    BigEnt,   // Combined entropy + bigram scoring
+    Brute,    // Composite scoring (min-sum + entropy + bigram)
     Adaptive, // Choose best per row (best compression)
     AdaptiveFast, // Adaptive with early cuts and reduced scoring
     AdaptiveSampled { interval: u32 }, // Adaptive on sampled rows
@@ -410,9 +414,17 @@ pub enum FilterStrategy {
 **Trade-offs**:
 
 - `None`: Fastest encoding, worst compression
-- `Entropy`: Higher compression than sum-of-abs scoring, slower
-- `Adaptive`: Best compression, slower encoding
-- Single filter: Middle ground
+- `MinSum`: Oxipng-style sum-of-abs scoring; good balance
+- `Entropy`: Higher compression than min-sum, slower
+- `Bigrams` / `BigEnt`: Heavier heuristics; best compression, higher CPU
+- `Brute`: Tries all heuristics; slowest, best ratio
+- `AdaptiveFast`: Good default for speed
+- `Adaptive`: Best compression among adaptives (non-brute)
+- Single filter: Middle ground (predictable)
+
+### Presets
+
+`PngOptions::oxipng_preset(level)` mirrors oxipng’s levels (0-6): adjusts compression level and filter strategy, and turns on alpha optimization, color/palette reduction, and metadata stripping for maximum savings. Exposed via CLI `--png-preset levelN`.
 
 ## Complete Encoding Example
 
