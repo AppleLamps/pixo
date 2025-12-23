@@ -51,8 +51,13 @@ test.describe('Smoke Tests', () => {
 			await expect(page.getByTestId('png-preset-slider')).toBeVisible();
 			const initialSize = await page.getByTestId('total-compressed-size').textContent();
 			// Change from default (1=Auto) to smaller (0)
-			await page.getByTestId('png-preset-slider').fill('0');
-			await page.getByTestId('png-preset-slider').dispatchEvent('change');
+			// Range inputs cannot use .fill() - must set value directly and dispatch events
+			const slider = page.getByTestId('png-preset-slider');
+			await slider.evaluate((el: HTMLInputElement) => {
+				el.value = '0';
+				el.dispatchEvent(new Event('input', { bubbles: true }));
+				el.dispatchEvent(new Event('change', { bubbles: true }));
+			});
 			await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 60000 });
 			await expect(page.getByTestId('total-compressed-size')).toBeVisible();
 		});
@@ -111,8 +116,11 @@ test.describe('Smoke Tests', () => {
 			await expect(slider).toBeVisible();
 			const initialValue = await slider.inputValue();
 			expect(parseInt(initialValue)).toBe(50);
-			await slider.fill('75');
-			await slider.dispatchEvent('input');
+			// Range inputs cannot use .fill() - must set value directly and dispatch events
+			await slider.evaluate((el: HTMLInputElement) => {
+				el.value = '75';
+				el.dispatchEvent(new Event('input', { bubbles: true }));
+			});
 			await expect(slider).toHaveValue('75');
 		});
 	});

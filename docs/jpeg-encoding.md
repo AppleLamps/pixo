@@ -274,28 +274,7 @@ Finally, the run/value pairs are Huffman encoded using Huffman tables. By defaul
 
 JPEG uses separate tables for luminance (Y) and chrominance (Cb, Cr) to optimize for their different statistics.
 
-### Optimized Huffman tables
-
-When `optimize_huffman` is enabled in `JpegOptions`, we:
-
-1. Run a counting pass over quantized coefficients (DC/AC, per component).
-2. Build canonical code lengths from symbol frequencies.
-3. Emit DHT segments derived from those lengths.
-
-If any code length would exceed the JPEG limit (16 bits) or counts are empty, we silently fall back to the standard tables. This improves compression at the cost of an extra pass over coefficients and slightly slower encode time.
-
-```rust
-// From src/jpeg/huffman.rs
-impl HuffmanTables {
-    fn get_dc_code(&self, category: u8, is_luminance: bool) -> HuffCode {
-        if is_luminance {
-            self.dc_lum_codes[category as usize]
-        } else {
-            self.dc_chrom_codes[category as usize]
-        }
-    }
-}
-```
+We can push compression further by building custom Huffman tables tuned to each image's actual symbol frequencies, rather than using the standard tables. For details on this and other advanced optimizations, see [Performance Optimization](./performance-optimization.md).
 
 ## JPEG File Structure
 
