@@ -12,7 +12,7 @@ use crate::error::{Error, Result};
 
 use dct::dct_2d;
 use huffman::{encode_block, HuffmanTables};
-use quantize::{quantize_block, QuantizationTables};
+use quantize::{quantize_block, zigzag_reorder, QuantizationTables};
 
 /// Maximum supported image dimension for JPEG.
 const MAX_DIMENSION: u32 = 65535;
@@ -41,6 +41,7 @@ pub fn encode(data: &[u8], width: u32, height: u32, quality: u8) -> Result<Vec<u
         quality,
         subsampling: Subsampling::S444,
         restart_interval: None,
+        optimize_huffman: false,
     };
     let mut output = Vec::new();
     encode_with_options_into(
@@ -67,6 +68,7 @@ pub fn encode_with_color(
         quality,
         subsampling: Subsampling::S444,
         restart_interval: None,
+        optimize_huffman: false,
     };
     let mut output = Vec::new();
     encode_with_options_into(
@@ -99,6 +101,8 @@ pub struct JpegOptions {
     pub subsampling: Subsampling,
     /// Restart interval in MCUs (None = disabled).
     pub restart_interval: Option<u16>,
+    /// If true, build image-optimized Huffman tables (like mozjpeg optimize_coding).
+    pub optimize_huffman: bool,
 }
 
 impl Default for JpegOptions {
@@ -107,6 +111,7 @@ impl Default for JpegOptions {
             quality: 75,
             subsampling: Subsampling::S444,
             restart_interval: None,
+            optimize_huffman: false,
         }
     }
 }
@@ -188,7 +193,22 @@ pub fn encode_with_options_into(
 
     // Create quantization and Huffman tables
     let quant_tables = QuantizationTables::with_quality(options.quality);
-    let huff_tables = HuffmanTables::default();
+    let huff_tables = if options.optimize_huffman {
+        if let Some(opt) = build_optimized_huffman_tables(
+            data,
+            width,
+            height,
+            color_type,
+            options.subsampling,
+            &quant_tables,
+        ) {
+            opt
+        } else {
+            HuffmanTables::default()
+        }
+    } else {
+        HuffmanTables::default()
+    };
 
     // Write JPEG headers
     write_soi(output);
@@ -407,6 +427,154 @@ fn write_sos(output: &mut Vec<u8>, color_type: ColorType) {
     output.push(0); // Start of spectral selection
     output.push(63); // End of spectral selection
     output.push(0); // Successive approximation
+}
+
+/// Build optimized Huffman tables by analyzing the image's quantized coefficients.
+fn build_optimized_huffman_tables(
+    data: &[u8],
+    width: u32,
+    height: u32,
+    color_type: ColorType,
+    subsampling: Subsampling,
+    quant_tables: &QuantizationTables,
+) -> Option<HuffmanTables> {
+    let width = width as usize;
+    let height = height as usize;
+
+    let mut dc_lum = [0u64; 12];
+    let mut dc_chrom = [0u64; 12];
+    let mut ac_lum = [0u64; 256];
+    let mut ac_chrom = [0u64; 256];
+
+    match (color_type, subsampling) {
+        (ColorType::Gray, _) => {
+            let padded_width = (width + 7) & !7;
+            let padded_height = (height + 7) & !7;
+            let mut prev_dc_y = 0i16;
+            for block_y in (0..padded_height).step_by(8) {
+                for block_x in (0..padded_width).step_by(8) {
+                    let (y_block, _, _) =
+                        extract_block(data, width, height, block_x, block_y, color_type);
+                    let y_dct = dct_2d(&y_block);
+                    let y_quant = quantize_block(&y_dct, &quant_tables.luminance_table);
+                    prev_dc_y = count_block(&y_quant, prev_dc_y, true, &mut dc_lum, &mut ac_lum);
+                }
+            }
+            HuffmanTables::optimized_from_counts(&dc_lum, None, &ac_lum, None)
+        }
+        (_, Subsampling::S444) => {
+            let padded_width = (width + 7) & !7;
+            let padded_height = (height + 7) & !7;
+            let mut prev_dc_y = 0i16;
+            let mut prev_dc_cb = 0i16;
+            let mut prev_dc_cr = 0i16;
+
+            for block_y in (0..padded_height).step_by(8) {
+                for block_x in (0..padded_width).step_by(8) {
+                    let (y_block, cb_block, cr_block) =
+                        extract_block(data, width, height, block_x, block_y, color_type);
+
+                    let y_quant = quantize_block(&dct_2d(&y_block), &quant_tables.luminance_table);
+                    prev_dc_y = count_block(&y_quant, prev_dc_y, true, &mut dc_lum, &mut ac_lum);
+
+                    let cb_quant =
+                        quantize_block(&dct_2d(&cb_block), &quant_tables.chrominance_table);
+                    prev_dc_cb =
+                        count_block(&cb_quant, prev_dc_cb, false, &mut dc_chrom, &mut ac_chrom);
+
+                    let cr_quant =
+                        quantize_block(&dct_2d(&cr_block), &quant_tables.chrominance_table);
+                    prev_dc_cr =
+                        count_block(&cr_quant, prev_dc_cr, false, &mut dc_chrom, &mut ac_chrom);
+                }
+            }
+
+            HuffmanTables::optimized_from_counts(&dc_lum, Some(&dc_chrom), &ac_lum, Some(&ac_chrom))
+        }
+        (_, Subsampling::S420) => {
+            let padded_width_420 = (width + 15) & !15;
+            let padded_height_420 = (height + 15) & !15;
+            let mut prev_dc_y = 0i16;
+            let mut prev_dc_cb = 0i16;
+            let mut prev_dc_cr = 0i16;
+
+            for mcu_y in (0..padded_height_420).step_by(16) {
+                for mcu_x in (0..padded_width_420).step_by(16) {
+                    let (y_blocks, cb_block, cr_block) =
+                        extract_mcu_420(data, width, height, mcu_x, mcu_y);
+
+                    for y_block in &y_blocks {
+                        let y_quant =
+                            quantize_block(&dct_2d(y_block), &quant_tables.luminance_table);
+                        prev_dc_y =
+                            count_block(&y_quant, prev_dc_y, true, &mut dc_lum, &mut ac_lum);
+                    }
+
+                    let cb_quant =
+                        quantize_block(&dct_2d(&cb_block), &quant_tables.chrominance_table);
+                    prev_dc_cb =
+                        count_block(&cb_quant, prev_dc_cb, false, &mut dc_chrom, &mut ac_chrom);
+
+                    let cr_quant =
+                        quantize_block(&dct_2d(&cr_block), &quant_tables.chrominance_table);
+                    prev_dc_cr =
+                        count_block(&cr_quant, prev_dc_cr, false, &mut dc_chrom, &mut ac_chrom);
+                }
+            }
+
+            HuffmanTables::optimized_from_counts(&dc_lum, Some(&dc_chrom), &ac_lum, Some(&ac_chrom))
+        }
+    }
+}
+
+fn count_block(
+    block: &[i16; 64],
+    prev_dc: i16,
+    is_luminance: bool,
+    dc_counts: &mut [u64; 12],
+    ac_counts: &mut [u64; 256],
+) -> i16 {
+    let zz = zigzag_reorder(block);
+    let dc = zz[0];
+    let dc_diff = dc - prev_dc;
+    let dc_cat = category_i16(dc_diff);
+    dc_counts[dc_cat as usize] += 1;
+
+    let mut zero_run = 0usize;
+    for &ac in zz.iter().skip(1) {
+        if ac == 0 {
+            zero_run += 1;
+        } else {
+            while zero_run >= 16 {
+                ac_counts[0xF0] += 1;
+                zero_run -= 16;
+            }
+            let ac_cat = category_i16(ac);
+            let rs = ((zero_run as u8) << 4) | ac_cat;
+            ac_counts[rs as usize] += 1;
+            zero_run = 0;
+        }
+    }
+    if zero_run > 0 {
+        ac_counts[0] += 1; // EOB
+    }
+
+    // Return current DC for next differential block
+    if is_luminance {
+        dc
+    } else {
+        dc
+    }
+}
+
+#[inline]
+fn category_i16(value: i16) -> u8 {
+    let abs_val = value.unsigned_abs();
+    if abs_val == 0 {
+        0
+    } else {
+        16 - abs_val.leading_zeros() as u8
+    }
 }
 
 /// Encode the image scan data.
@@ -717,6 +885,7 @@ mod tests {
             quality: 85,
             subsampling: Subsampling::S444,
             restart_interval: None,
+            optimize_huffman: false,
         };
 
         encode_with_options_into(&mut output, &pixels1, 1, 1, 85, ColorType::Rgb, &opts).unwrap();

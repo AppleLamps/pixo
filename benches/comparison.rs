@@ -189,6 +189,7 @@ fn bench_jpeg_comparison(c: &mut Criterion) {
                             quality: 85,
                             subsampling: jpeg::Subsampling::S444,
                             restart_interval: None,
+                            optimize_huffman: false,
                         },
                     )
                     .unwrap()
@@ -213,6 +214,7 @@ fn bench_jpeg_comparison(c: &mut Criterion) {
                             quality: 85,
                             subsampling: jpeg::Subsampling::S420,
                             restart_interval: None,
+                            optimize_huffman: false,
                         },
                     )
                     .unwrap()
@@ -375,6 +377,7 @@ fn print_summary_report() {
             quality: 85,
             subsampling: jpeg::Subsampling::S444,
             restart_interval: None,
+            optimize_huffman: false,
         },
     )
     .unwrap();
@@ -407,6 +410,7 @@ fn print_summary_report() {
             quality: 85,
             subsampling: jpeg::Subsampling::S420,
             restart_interval: None,
+            optimize_huffman: false,
         },
     )
     .unwrap();
@@ -508,6 +512,7 @@ fn print_summary_report() {
                 quality: 85,
                 subsampling: jpeg::Subsampling::S444,
                 restart_interval: None,
+                optimize_huffman: false,
             },
         )
         .unwrap();

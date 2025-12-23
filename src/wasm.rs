@@ -175,6 +175,7 @@ pub fn encode_jpeg(
             Subsampling::S444
         },
         restart_interval: None,
+        optimize_huffman: false,
     };
 
     jpeg::encode_with_options(data, width, height, quality, color, &options)

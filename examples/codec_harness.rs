@@ -313,6 +313,7 @@ fn run_jpeg_section(
             quality: 85,
             subsampling: jpeg::Subsampling::S444,
             restart_interval: None,
+            optimize_huffman: false,
         },
     )?;
     let comprs_dur = t0.elapsed();

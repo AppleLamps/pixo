@@ -36,6 +36,9 @@ struct Args {
     /// JPEG quality (1-100, higher = better quality)
     #[arg(short, long, default_value = "85", value_parser = clap::value_parser!(u8).range(1..=100))]
     quality: u8,
+    /// Optimize JPEG Huffman tables (smaller files, slower)
+    #[arg(long, default_value_t = false)]
+    jpeg_optimize_huffman: bool,
 
     /// PNG compression level (1-9, higher = smaller file)
     #[arg(short = 'c', long, default_value = "2", value_parser = clap::value_parser!(u8).range(1..=9))]
@@ -555,11 +558,15 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 quality: args.quality,
                 subsampling: args.subsampling.into(),
                 restart_interval: None,
+                optimize_huffman: args.jpeg_optimize_huffman,
             };
             if args.verbose {
                 eprintln!(
-                    "JPEG options: quality={}, subsampling={:?}, restart_interval={:?}",
-                    options.quality, options.subsampling, options.restart_interval
+                    "JPEG options: quality={}, subsampling={:?}, restart_interval={:?}, optimize_huffman={}",
+                    options.quality,
+                    options.subsampling,
+                    options.restart_interval,
+                    options.optimize_huffman
                 );
             }
             comprs::jpeg::encode_with_options_into(

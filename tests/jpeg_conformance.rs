@@ -144,6 +144,7 @@ fn test_invalid_restart_interval() {
         quality: 85,
         subsampling: jpeg::Subsampling::S444,
         restart_interval: Some(0),
+        optimize_huffman: false,
     };
     let result = jpeg::encode_with_options(&pixels, 8, 8, 85, ColorType::Rgb, &opts);
     assert!(result.is_err());
@@ -276,11 +277,13 @@ fn test_jpeg_subsampling_420() {
         quality: 75,
         subsampling: jpeg::Subsampling::S444,
         restart_interval: None,
+        optimize_huffman: false,
     };
     let opts_420 = jpeg::JpegOptions {
         quality: 75,
         subsampling: jpeg::Subsampling::S420,
         restart_interval: None,
+        optimize_huffman: false,
     };
 
     let jpeg_444 =
@@ -309,6 +312,7 @@ fn test_jpeg_restart_interval_marker_and_decode() {
         quality: 80,
         subsampling: jpeg::Subsampling::S444,
         restart_interval: Some(4),
+        optimize_huffman: false,
     };
 
     let jpeg_bytes =
@@ -342,6 +346,7 @@ fn test_jpeg_marker_structure_with_restart() {
         quality: 85,
         subsampling: jpeg::Subsampling::S420,
         restart_interval: Some(4),
+        optimize_huffman: false,
     };
 
     let jpeg_bytes =
@@ -418,6 +423,7 @@ fn test_jpeg_no_restart_marker_without_interval() {
         quality: 80,
         subsampling: jpeg::Subsampling::S444,
         restart_interval: None,
+        optimize_huffman: false,
     };
 
     let jpeg_bytes =
@@ -473,6 +479,7 @@ proptest! {
             quality,
             subsampling,
             restart_interval,
+            optimize_huffman: false,
         };
 
         let encoded =
