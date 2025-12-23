@@ -35,6 +35,9 @@ const DEFAULT_CJPEG_FALLBACK: &str = "vendor/mozjpeg/cjpeg";
 const DEFAULT_COMPRS_PRESET_ENV: &str = "COMPRS_PNG_PRESET";
 const DEFAULT_COMPRS_FILTER_ENV: &str = "COMPRS_PNG_FILTER";
 const DEFAULT_COMPRS_LEVEL_ENV: &str = "COMPRS_PNG_LEVEL";
+const DEFAULT_JPEG_OPT_ENV: &str = "COMPRS_JPEG_OPTIMIZE_HUFFMAN";
+const DEFAULT_JPEG_SUB_ENV: &str = "COMPRS_JPEG_SUBSAMPLING"; // s444/s420
+const DEFAULT_JPEG_RESTART_ENV: &str = "COMPRS_JPEG_RESTART";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let fixtures_dir = env::var("FIXTURES").unwrap_or_else(|_| DEFAULT_FIXTURES.to_string());
@@ -147,6 +150,51 @@ fn load_comprs_png_options() -> (png::PngOptions, String) {
     (opts, desc)
 }
 
+fn load_comprs_jpeg_options() -> (jpeg::JpegOptions, String) {
+    let mut opts = jpeg::JpegOptions {
+        quality: 85,
+        subsampling: jpeg::Subsampling::S444,
+        restart_interval: None,
+        optimize_huffman: false,
+    };
+    let mut desc_parts = Vec::new();
+
+    if let Ok(opt_str) = env::var(DEFAULT_JPEG_OPT_ENV) {
+        let enable = matches!(opt_str.to_ascii_lowercase().as_str(), "1" | "true" | "yes");
+        opts.optimize_huffman = enable;
+        desc_parts.push(format!("opt_huff={enable}"));
+    }
+
+    if let Ok(sub_str) = env::var(DEFAULT_JPEG_SUB_ENV) {
+        if let Some(sub) = parse_subsampling(&sub_str) {
+            opts.subsampling = sub;
+            desc_parts.push(format!("subsampling={}", sub_str.to_ascii_lowercase()));
+        } else {
+            desc_parts.push(format!("subsampling={sub_str}(invalid)"));
+        }
+    }
+
+    if let Ok(restart_str) = env::var(DEFAULT_JPEG_RESTART_ENV) {
+        if let Ok(v) = restart_str.parse::<u16>() {
+            if v > 0 {
+                opts.restart_interval = Some(v);
+                desc_parts.push(format!("restart={v}"));
+            } else {
+                desc_parts.push("restart=0(disabled)".to_string());
+            }
+        } else {
+            desc_parts.push(format!("restart={restart_str}(parse-fail)"));
+        }
+    }
+
+    let desc = if desc_parts.is_empty() {
+        "default".to_string()
+    } else {
+        desc_parts.join(",")
+    };
+    (opts, desc)
+}
+
 fn parse_filter(name: &str) -> Option<png::FilterStrategy> {
     match name.to_ascii_lowercase().as_str() {
         "none" => Some(png::FilterStrategy::None),
@@ -164,6 +212,14 @@ fn parse_filter(name: &str) -> Option<png::FilterStrategy> {
         "adaptive-sampled" | "adaptive_sampled" => {
             Some(png::FilterStrategy::AdaptiveSampled { interval: 4 })
         }
+        _ => None,
+    }
+}
+
+fn parse_subsampling(name: &str) -> Option<jpeg::Subsampling> {
+    match name.to_ascii_lowercase().as_str() {
+        "s444" | "444" => Some(jpeg::Subsampling::S444),
+        "s420" | "420" => Some(jpeg::Subsampling::S420),
         _ => None,
     }
 }
@@ -298,6 +354,7 @@ fn run_jpeg_section(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let rgb = img.to_rgb8();
     let (w, h) = (rgb.width(), rgb.height());
+    let (comprs_jpeg_opts, jpeg_desc) = load_comprs_jpeg_options();
 
     // comprs JPEG
     let mut comprs_buf = Vec::new();
@@ -307,20 +364,16 @@ fn run_jpeg_section(
         rgb.as_raw(),
         w,
         h,
-        85,
+        comprs_jpeg_opts.quality,
         ColorType::Rgb,
-        &jpeg::JpegOptions {
-            quality: 85,
-            subsampling: jpeg::Subsampling::S444,
-            restart_interval: None,
-            optimize_huffman: false,
-        },
+        &comprs_jpeg_opts,
     )?;
     let comprs_dur = t0.elapsed();
     println!(
-        "JPG comprs (q85 4:4:4): {:>8} bytes, {:>6.2} ms",
+        "JPG comprs ({desc}): {:>8} bytes, {:>6.2} ms",
         comprs_buf.len(),
-        to_millis(comprs_dur)
+        to_millis(comprs_dur),
+        desc = jpeg_desc
     );
 
     if Path::new(cjpeg_bin).exists() {
