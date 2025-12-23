@@ -32,6 +32,9 @@ const DEFAULT_FIXTURES: &str = "tests/fixtures";
 const DEFAULT_OXIPNG: &str = "vendor/oxipng/target/release/oxipng";
 const DEFAULT_CJPEG_BUILD: &str = "vendor/mozjpeg/build/cjpeg";
 const DEFAULT_CJPEG_FALLBACK: &str = "vendor/mozjpeg/cjpeg";
+const DEFAULT_COMPRS_PRESET_ENV: &str = "COMPRS_PNG_PRESET";
+const DEFAULT_COMPRS_FILTER_ENV: &str = "COMPRS_PNG_FILTER";
+const DEFAULT_COMPRS_LEVEL_ENV: &str = "COMPRS_PNG_LEVEL";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let fixtures_dir = env::var("FIXTURES").unwrap_or_else(|_| DEFAULT_FIXTURES.to_string());
@@ -82,6 +85,89 @@ fn pick_cjpeg() -> &'static str {
     }
 }
 
+fn load_comprs_png_options() -> (png::PngOptions, String) {
+    // Start from defaults
+    let mut opts = png::PngOptions::default();
+    let mut desc_parts = Vec::new();
+
+    // Optional preset override (COMPRS_PNG_PRESET)
+    if let Ok(preset_name) = env::var(DEFAULT_COMPRS_PRESET_ENV) {
+        let lower = preset_name.to_ascii_lowercase();
+        let preset = match lower.as_str() {
+            "fast" => Some(png::PngOptions::fast()),
+            "balanced" => Some(png::PngOptions::balanced()),
+            "max" => Some(png::PngOptions::max_compression()),
+            "level0" => png::PngOptions::oxipng_preset(0),
+            "level1" => png::PngOptions::oxipng_preset(1),
+            "level2" => png::PngOptions::oxipng_preset(2),
+            "level3" => png::PngOptions::oxipng_preset(3),
+            "level4" => png::PngOptions::oxipng_preset(4),
+            "level5" => png::PngOptions::oxipng_preset(5),
+            "level6" => png::PngOptions::oxipng_preset(6),
+            _ => None,
+        };
+        if let Some(p) = preset {
+            opts = p;
+            desc_parts.push(format!("preset={}", lower));
+        } else {
+            desc_parts.push(format!("preset={lower}(invalid->default)"));
+        }
+    }
+
+    // Optional compression level override (COMPRS_PNG_LEVEL)
+    if let Ok(level_str) = env::var(DEFAULT_COMPRS_LEVEL_ENV) {
+        if let Ok(level) = level_str.parse::<u8>() {
+            if (1..=9).contains(&level) {
+                opts.compression_level = level;
+                desc_parts.push(format!("level={level}"));
+            } else {
+                desc_parts.push(format!("level={level}(invalid-range)"));
+            }
+        } else {
+            desc_parts.push(format!("level={level_str}(parse-fail)"));
+        }
+    }
+
+    // Optional filter override (COMPRS_PNG_FILTER)
+    if let Ok(filter_name) = env::var(DEFAULT_COMPRS_FILTER_ENV) {
+        if let Some(f) = parse_filter(&filter_name) {
+            opts.filter_strategy = f;
+            desc_parts.push(format!("filter={}", filter_name.to_ascii_lowercase()));
+        } else {
+            desc_parts.push(format!("filter={}(invalid)", filter_name));
+        }
+    }
+
+    let desc = if desc_parts.is_empty() {
+        "default".to_string()
+    } else {
+        desc_parts.join(",")
+    };
+
+    (opts, desc)
+}
+
+fn parse_filter(name: &str) -> Option<png::FilterStrategy> {
+    match name.to_ascii_lowercase().as_str() {
+        "none" => Some(png::FilterStrategy::None),
+        "sub" => Some(png::FilterStrategy::Sub),
+        "up" => Some(png::FilterStrategy::Up),
+        "average" | "avg" => Some(png::FilterStrategy::Average),
+        "paeth" => Some(png::FilterStrategy::Paeth),
+        "minsum" => Some(png::FilterStrategy::MinSum),
+        "entropy" => Some(png::FilterStrategy::Entropy),
+        "bigrams" => Some(png::FilterStrategy::Bigrams),
+        "bigent" => Some(png::FilterStrategy::BigEnt),
+        "brute" => Some(png::FilterStrategy::Brute),
+        "adaptive" => Some(png::FilterStrategy::Adaptive),
+        "adaptive-fast" | "adaptive_fast" => Some(png::FilterStrategy::AdaptiveFast),
+        "adaptive-sampled" | "adaptive_sampled" => {
+            Some(png::FilterStrategy::AdaptiveSampled { interval: 4 })
+        }
+        _ => None,
+    }
+}
+
 fn collect_fixtures(root: &Path) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
     let mut files = Vec::new();
     recurse_dir(root, &mut files)?;
@@ -118,22 +204,27 @@ fn run_png_section(
     let rgba = img.to_rgba8();
     let (w, h) = (rgba.width(), rgba.height());
 
+    let (comprs_opts, comprs_desc) = load_comprs_png_options();
+
     // comprs encode
     let mut comprs_buf = Vec::new();
     let t0 = Instant::now();
-    png::encode_into(
-        &mut comprs_buf,
-        &rgba,
-        w,
-        h,
-        ColorType::Rgba,
-        &png::PngOptions::default(),
-    )?;
+    png::encode_into(&mut comprs_buf, &rgba, w, h, ColorType::Rgba, &comprs_opts)?;
     let comprs_dur = t0.elapsed();
     println!(
-        "PNG comprs (default): {:>8} bytes, {:>6.2} ms",
+        "PNG comprs ({desc}): {:>8} bytes, {:>6.2} ms",
         comprs_buf.len(),
-        to_millis(comprs_dur)
+        to_millis(comprs_dur),
+        desc = comprs_desc
+    );
+    println!(
+        "  options: level={}, filter={:?}, alpha_opt={}, reduce_color={}, reduce_palette={}, strip_meta={}",
+        comprs_opts.compression_level,
+        comprs_opts.filter_strategy,
+        comprs_opts.optimize_alpha,
+        comprs_opts.reduce_color_type,
+        comprs_opts.reduce_palette,
+        comprs_opts.strip_metadata
     );
 
     // Prepare a PNG file for external tools (reuse source if already PNG)
