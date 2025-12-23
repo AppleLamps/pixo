@@ -72,6 +72,7 @@ pub fn encode_png(
     let options = PngOptions {
         compression_level,
         filter_strategy: FilterStrategy::Adaptive,
+        ..Default::default()
     };
 
     png::encode_with_options(data, width, height, color, &options)
@@ -121,6 +122,7 @@ pub fn encode_png_with_filter(
     let options = PngOptions {
         compression_level,
         filter_strategy,
+        ..Default::default()
     };
 
     png::encode_with_options(data, width, height, color, &options)

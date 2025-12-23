@@ -31,6 +31,8 @@ pub struct PngOptions {
     pub reduce_color_type: bool,
     /// If true, strip non-critical ancillary chunks (tEXt, iTXt, zTXt, time) to reduce size.
     pub strip_metadata: bool,
+    /// If true, attempt palette reduction when <=256 colors (writes PLTE/tRNS).
+    pub reduce_palette: bool,
 }
 
 impl Default for PngOptions {
@@ -43,6 +45,7 @@ impl Default for PngOptions {
             optimize_alpha: false,
             reduce_color_type: false,
             strip_metadata: false,
+            reduce_palette: false,
         }
     }
 }
@@ -56,6 +59,7 @@ impl PngOptions {
             optimize_alpha: false,
             reduce_color_type: false,
             strip_metadata: false,
+            reduce_palette: false,
         }
     }
 
@@ -67,6 +71,7 @@ impl PngOptions {
             optimize_alpha: false,
             reduce_color_type: false,
             strip_metadata: false,
+            reduce_palette: false,
         }
     }
 
@@ -78,6 +83,7 @@ impl PngOptions {
             optimize_alpha: false,
             reduce_color_type: false,
             strip_metadata: false,
+            reduce_palette: false,
         }
     }
 }
@@ -193,16 +199,36 @@ pub fn encode_into(
     // Write PNG signature
     output.extend_from_slice(&PNG_SIGNATURE);
 
-    // Optionally reduce color type (e.g., drop alpha or convert to grayscale) before encoding.
-    let (data, color_type) =
+    // Optionally reduce color type/palette before encoding.
+    let reduced =
         maybe_reduce_color_type(data, width as usize, height as usize, color_type, options);
-    let bytes_per_pixel = color_type.bytes_per_pixel();
+    let bytes_per_pixel = reduced.bytes_per_pixel;
 
     // Write IHDR chunk
-    write_ihdr(output, width, height, color_type);
+    write_ihdr(
+        output,
+        width,
+        height,
+        reduced.bit_depth,
+        reduced.color_type_byte,
+    );
+
+    // Write palette/tRNS if present
+    if let Some(ref palette) = reduced.palette {
+        let mut plte = Vec::with_capacity(palette.len() * 3);
+        for entry in palette {
+            plte.extend_from_slice(&entry[..3]);
+        }
+        chunk::write_chunk(output, b"PLTE", &plte);
+
+        if palette.iter().any(|p| p[3] != 255) {
+            let alphas: Vec<u8> = palette.iter().map(|p| p[3]).collect();
+            chunk::write_chunk(output, b"tRNS", &alphas);
+        }
+    }
 
     // Apply filtering and compression
-    let data = maybe_optimize_alpha(&data, color_type, options.optimize_alpha);
+    let data = maybe_optimize_alpha(&reduced.data, reduced.effective_color_type, options.optimize_alpha);
 
     let filtered = filter::apply_filters(&data, width, height, bytes_per_pixel, options);
     let compressed = deflate_zlib_packed(&filtered, options.compression_level);
@@ -262,9 +288,35 @@ pub fn encode_into_with_stats(
     output.clear();
     output.reserve(expected_len / 2 + 1024);
     output.extend_from_slice(&PNG_SIGNATURE);
-    write_ihdr(output, width, height, color_type);
+    // Reduce (palette/color) for stats path as well.
+    let reduced =
+        maybe_reduce_color_type(data, width as usize, height as usize, color_type, options);
+    write_ihdr(
+        output,
+        width,
+        height,
+        reduced.bit_depth,
+        reduced.color_type_byte,
+    );
+    if let Some(ref palette) = reduced.palette {
+        let mut plte = Vec::with_capacity(palette.len() * 3);
+        for entry in palette {
+            plte.extend_from_slice(&entry[..3]);
+        }
+        chunk::write_chunk(output, b"PLTE", &plte);
+        if palette.iter().any(|p| p[3] != 255) {
+            let alphas: Vec<u8> = palette.iter().map(|p| p[3]).collect();
+            chunk::write_chunk(output, b"tRNS", &alphas);
+        }
+    }
 
-    let filtered = filter::apply_filters(data, width, height, bytes_per_pixel, options);
+    let filtered = filter::apply_filters(
+        &reduced.data,
+        width,
+        height,
+        reduced.bytes_per_pixel,
+        options,
+    );
     let (compressed, stats) = deflate_zlib_packed_with_stats(&filtered, options.compression_level);
     write_idat_chunks(output, &compressed);
     write_iend(output);
@@ -273,7 +325,13 @@ pub fn encode_into_with_stats(
 }
 
 /// Write IHDR (image header) chunk.
-fn write_ihdr(output: &mut Vec<u8>, width: u32, height: u32, color_type: ColorType) {
+fn write_ihdr(
+    output: &mut Vec<u8>,
+    width: u32,
+    height: u32,
+    bit_depth: u8,
+    color_type_byte: u8,
+) {
     let mut ihdr_data = Vec::with_capacity(13);
 
     // Width (4 bytes, big-endian)
@@ -283,10 +341,10 @@ fn write_ihdr(output: &mut Vec<u8>, width: u32, height: u32, color_type: ColorTy
     ihdr_data.extend_from_slice(&height.to_be_bytes());
 
     // Bit depth (1 byte)
-    ihdr_data.push(color_type.png_bit_depth());
+    ihdr_data.push(bit_depth);
 
     // Color type (1 byte)
-    ihdr_data.push(color_type.png_color_type());
+    ihdr_data.push(color_type_byte);
 
     // Compression method (1 byte) - always 0 (DEFLATE)
     ihdr_data.push(0);
@@ -356,19 +414,46 @@ fn maybe_optimize_alpha<'a>(
     std::borrow::Cow::Owned(out)
 }
 
-/// Optionally reduce color type when lossless-safe:
-/// - RGBA with all alpha=255 -> RGB
-/// - RGBA where R==G==B for all pixels -> GrayAlpha (or Gray if alpha all 255)
-/// - RGB where R==G==B for all pixels -> Gray
+struct ReducedImage<'a> {
+    data: std::borrow::Cow<'a, [u8]>,
+    effective_color_type: ColorType,
+    color_type_byte: u8,
+    bit_depth: u8,
+    bytes_per_pixel: usize,
+    palette: Option<Vec<[u8; 4]>>,
+}
+
+/// Optionally reduce color type/palette when lossless-safe.
 fn maybe_reduce_color_type<'a>(
     data: &'a [u8],
     width: usize,
     height: usize,
     color_type: ColorType,
     options: &PngOptions,
-) -> (std::borrow::Cow<'a, [u8]>, ColorType) {
+) -> ReducedImage<'a> {
+    // Palette reduction takes priority if enabled and possible
+    if options.reduce_palette {
+        if let Some((indexed, palette)) = build_palette(data, color_type, width, height) {
+            return ReducedImage {
+                data: std::borrow::Cow::Owned(indexed),
+                effective_color_type: ColorType::Rgb, // For optimize_alpha logic (unused for palette)
+                color_type_byte: 3,
+                bit_depth: 8,
+                bytes_per_pixel: 1,
+                palette: Some(palette),
+            };
+        }
+    }
+
     if !options.reduce_color_type {
-        return (std::borrow::Cow::Borrowed(data), color_type);
+        return ReducedImage {
+            data: std::borrow::Cow::Borrowed(data),
+            effective_color_type: color_type,
+            color_type_byte: color_type.png_color_type(),
+            bit_depth: color_type.png_bit_depth(),
+            bytes_per_pixel: color_type.bytes_per_pixel(),
+            palette: None,
+        };
     }
 
     match color_type {
@@ -378,39 +463,125 @@ fn maybe_reduce_color_type<'a>(
                 for chunk in data.chunks_exact(3) {
                     gray.push(chunk[0]);
                 }
-                return (std::borrow::Cow::Owned(gray), ColorType::Gray);
+                ReducedImage {
+                    data: std::borrow::Cow::Owned(gray),
+                    effective_color_type: ColorType::Gray,
+                    color_type_byte: ColorType::Gray.png_color_type(),
+                    bit_depth: 8,
+                    bytes_per_pixel: 1,
+                    palette: None,
+                }
+            } else {
+                ReducedImage {
+                    data: std::borrow::Cow::Borrowed(data),
+                    effective_color_type: color_type,
+                    color_type_byte: color_type.png_color_type(),
+                    bit_depth: 8,
+                    bytes_per_pixel: 3,
+                    palette: None,
+                }
             }
         }
         ColorType::Rgba => {
             let (all_opaque, all_gray) = analyze_rgba(data);
             if all_opaque && all_gray {
-                // Can drop alpha and use Gray
                 let mut gray = Vec::with_capacity(width * height);
                 for chunk in data.chunks_exact(4) {
                     gray.push(chunk[0]);
                 }
-                return (std::borrow::Cow::Owned(gray), ColorType::Gray);
+                ReducedImage {
+                    data: std::borrow::Cow::Owned(gray),
+                    effective_color_type: ColorType::Gray,
+                    color_type_byte: ColorType::Gray.png_color_type(),
+                    bit_depth: 8,
+                    bytes_per_pixel: 1,
+                    palette: None,
+                }
             } else if all_opaque {
-                // Drop alpha, keep RGB
                 let mut rgb = Vec::with_capacity(width * height * 3);
                 for chunk in data.chunks_exact(4) {
                     rgb.extend_from_slice(&chunk[..3]);
                 }
-                return (std::borrow::Cow::Owned(rgb), ColorType::Rgb);
+                ReducedImage {
+                    data: std::borrow::Cow::Owned(rgb),
+                    effective_color_type: ColorType::Rgb,
+                    color_type_byte: ColorType::Rgb.png_color_type(),
+                    bit_depth: 8,
+                    bytes_per_pixel: 3,
+                    palette: None,
+                }
             } else if all_gray {
-                // Preserve alpha, convert to GrayAlpha
                 let mut ga = Vec::with_capacity(width * height * 2);
                 for chunk in data.chunks_exact(4) {
                     ga.push(chunk[0]);
                     ga.push(chunk[3]);
                 }
-                return (std::borrow::Cow::Owned(ga), ColorType::GrayAlpha);
+                ReducedImage {
+                    data: std::borrow::Cow::Owned(ga),
+                    effective_color_type: ColorType::GrayAlpha,
+                    color_type_byte: ColorType::GrayAlpha.png_color_type(),
+                    bit_depth: 8,
+                    bytes_per_pixel: 2,
+                    palette: None,
+                }
+            } else {
+                ReducedImage {
+                    data: std::borrow::Cow::Borrowed(data),
+                    effective_color_type: color_type,
+                    color_type_byte: color_type.png_color_type(),
+                    bit_depth: 8,
+                    bytes_per_pixel: 4,
+                    palette: None,
+                }
             }
         }
-        _ => {}
+        _ => ReducedImage {
+            data: std::borrow::Cow::Borrowed(data),
+            effective_color_type: color_type,
+            color_type_byte: color_type.png_color_type(),
+            bit_depth: color_type.png_bit_depth(),
+            bytes_per_pixel: color_type.bytes_per_pixel(),
+            palette: None,
+        },
+    }
+}
+
+fn build_palette(
+    data: &[u8],
+    color_type: ColorType,
+    width: usize,
+    height: usize,
+) -> Option<(Vec<u8>, Vec<[u8; 4]>)> {
+    match color_type {
+        ColorType::Rgb | ColorType::Rgba => {}
+        _ => return None,
+    }
+    use std::collections::HashMap;
+    let mut map: HashMap<[u8; 4], u8> = HashMap::with_capacity(256);
+    let mut palette: Vec<[u8; 4]> = Vec::new();
+    let mut indexed = Vec::with_capacity(width * height);
+
+    let stride = color_type.bytes_per_pixel();
+    for chunk in data.chunks_exact(stride) {
+        let entry = match color_type {
+            ColorType::Rgb => [chunk[0], chunk[1], chunk[2], 255],
+            ColorType::Rgba => [chunk[0], chunk[1], chunk[2], chunk[3]],
+            _ => unreachable!(),
+        };
+        if let Some(&idx) = map.get(&entry) {
+            indexed.push(idx);
+        } else {
+            if palette.len() == 256 {
+                return None;
+            }
+            let idx = palette.len() as u8;
+            palette.push(entry);
+            map.insert(entry, idx);
+            indexed.push(idx);
+        }
     }
 
-    (std::borrow::Cow::Borrowed(data), color_type)
+    Some((indexed, palette))
 }
 
 fn all_gray_rgb(data: &[u8]) -> bool {
@@ -580,9 +751,9 @@ mod tests {
             reduce_color_type: true,
             ..Default::default()
         };
-        let (out, ct) = maybe_reduce_color_type(&pixels, 2, 1, ColorType::Rgb, &opts);
-        assert!(matches!(ct, ColorType::Gray));
-        assert_eq!(&out[..], &[10, 50]);
+        let reduced = maybe_reduce_color_type(&pixels, 2, 1, ColorType::Rgb, &opts);
+        assert!(matches!(reduced.effective_color_type, ColorType::Gray));
+        assert_eq!(&reduced.data[..], &[10, 50]);
     }
 
     #[test]
@@ -596,9 +767,9 @@ mod tests {
             reduce_color_type: true,
             ..Default::default()
         };
-        let (out, ct) = maybe_reduce_color_type(&pixels, 2, 1, ColorType::Rgba, &opts);
-        assert!(matches!(ct, ColorType::Rgb));
-        assert_eq!(&out[..], &[1, 2, 3, 4, 5, 6]);
+        let reduced = maybe_reduce_color_type(&pixels, 2, 1, ColorType::Rgba, &opts);
+        assert!(matches!(reduced.effective_color_type, ColorType::Rgb));
+        assert_eq!(&reduced.data[..], &[1, 2, 3, 4, 5, 6]);
     }
 
     #[test]
@@ -612,9 +783,9 @@ mod tests {
             reduce_color_type: true,
             ..Default::default()
         };
-        let (out, ct) = maybe_reduce_color_type(&pixels, 2, 1, ColorType::Rgba, &opts);
-        assert!(matches!(ct, ColorType::GrayAlpha));
-        assert_eq!(&out[..], &[8, 10, 9, 0]);
+        let reduced = maybe_reduce_color_type(&pixels, 2, 1, ColorType::Rgba, &opts);
+        assert!(matches!(reduced.effective_color_type, ColorType::GrayAlpha));
+        assert_eq!(&reduced.data[..], &[8, 10, 9, 0]);
     }
 
     #[test]
@@ -646,6 +817,23 @@ mod tests {
         assert!(png_bytes.windows(4).any(|w| w == b"IHDR"));
         assert!(png_bytes.windows(4).any(|w| w == b"IDAT"));
         assert!(png_bytes.windows(4).any(|w| w == b"IEND"));
+    }
+
+    #[test]
+    fn test_palette_reduction_writes_plte() {
+        // Two-color RGBA image, opaque -> should palette to 2 entries.
+        let pixels = vec![
+            255, 0, 0, 255, // red
+            0, 255, 0, 255, // green
+        ];
+        let opts = PngOptions {
+            reduce_palette: true,
+            ..Default::default()
+        };
+        let png = encode_with_options(&pixels, 2, 1, ColorType::Rgba, &opts).unwrap();
+        // Color type byte in IHDR should be 3 (palette)
+        assert_eq!(png[25], 3);
+        assert!(png.windows(4).any(|w| w == b"PLTE"));
     }
 
     #[test]
