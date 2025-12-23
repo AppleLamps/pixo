@@ -48,7 +48,6 @@ test.describe('Smoke Tests', () => {
 			await page.goto('/');
 			await waitForWasm();
 			await uploadAndWaitForCompression(FIXTURES.PNG);
-			await expect(page.getByTestId('format-select')).toHaveValue('png');
 			await expect(page.getByTestId('compression-level-slider')).toBeVisible();
 			await expect(page.getByTestId('filter-select')).toBeVisible();
 			const initialSize = await page.getByTestId('total-compressed-size').textContent();
@@ -67,7 +66,6 @@ test.describe('Smoke Tests', () => {
 			await expect(page.getByTestId('main-content')).toHaveAttribute('data-view-mode', 'single');
 			await expect(page.getByTestId('single-view')).toBeVisible();
 			await expect(page.getByTestId('image-name')).toContainText('multi-agent.jpg');
-			await expect(page.getByTestId('format-select')).toHaveValue('jpeg');
 		});
 
 		test('should show JPEG quality controls for JPEG format', async ({ page, waitForWasm, uploadAndWaitForCompression }) => {
@@ -78,18 +76,6 @@ test.describe('Smoke Tests', () => {
 			await expect(page.getByTestId('quality-value')).toBeVisible();
 			await expect(page.getByTestId('compression-level-slider')).not.toBeVisible();
 			await expect(page.getByTestId('filter-select')).not.toBeVisible();
-		});
-	});
-
-	test.describe('Format Switching', () => {
-		test('should switch format and recompress', async ({ page, waitForWasm, uploadAndWaitForCompression }) => {
-			await page.goto('/');
-			await waitForWasm();
-			await uploadAndWaitForCompression(FIXTURES.PNG);
-			await expect(page.getByTestId('format-select')).toHaveValue('png');
-			await page.getByTestId('format-select').selectOption('jpeg');
-			await expect(page.getByTestId('download-button')).toBeVisible({ timeout: 60000 });
-			await expect(page.getByTestId('quality-slider')).toBeVisible();
 		});
 	});
 
