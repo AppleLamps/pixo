@@ -64,6 +64,16 @@ pub fn apply_filters(
     // reduce per-row work while preserving quality.
     let mut strategy = options.filter_strategy;
     let area = (width as usize).saturating_mul(height as usize);
+    // For tiny images, avoid expensive brute/bigent/bigrams/entropy passes.
+    if area <= 1024 {
+        strategy = match strategy {
+            FilterStrategy::Brute
+            | FilterStrategy::BigEnt
+            | FilterStrategy::Bigrams
+            | FilterStrategy::Entropy => FilterStrategy::AdaptiveFast,
+            _ => strategy,
+        };
+    }
     // For very small images, prefer Sub filter to minimize CPU overhead.
     if area <= 4096
         && matches!(
@@ -124,6 +134,7 @@ pub fn apply_filters(
     let mut last_filter: u8 = FILTER_PAETH; // default guess for sampled reuse
                                             // Track last used filter to bias adaptive_fast toward recent winner.
     let mut last_adaptive_filter: Option<u8> = None;
+    let mut filter_counts = [0usize; 5];
 
     for y in 0..height as usize {
         let row_start = y * row_bytes;
@@ -262,6 +273,25 @@ pub fn apply_filters(
 
         // Update previous row reference
         prev_row = row;
+
+        if options.verbose_filter_log {
+            if last_filter <= FILTER_PAETH {
+                filter_counts[last_filter as usize] += 1;
+            }
+        }
+    }
+
+    if options.verbose_filter_log {
+        eprintln!(
+            "PNG filters: strategy={:?}, rows={} counts={{None:{}, Sub:{}, Up:{}, Avg:{}, Paeth:{}}}",
+            strategy,
+            height,
+            filter_counts[0],
+            filter_counts[1],
+            filter_counts[2],
+            filter_counts[3],
+            filter_counts[4]
+        );
     }
 
     output

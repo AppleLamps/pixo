@@ -35,6 +35,8 @@ pub struct PngOptions {
     pub strip_metadata: bool,
     /// If true, attempt palette reduction when <=256 colors (writes PLTE/tRNS).
     pub reduce_palette: bool,
+    /// If true, log filter usage histogram to stderr (for debugging/CLI verbose).
+    pub verbose_filter_log: bool,
 }
 
 impl Default for PngOptions {
@@ -48,6 +50,7 @@ impl Default for PngOptions {
             reduce_color_type: false,
             strip_metadata: false,
             reduce_palette: false,
+            verbose_filter_log: false,
         }
     }
 }
@@ -62,6 +65,7 @@ impl PngOptions {
             reduce_color_type: false,
             strip_metadata: false,
             reduce_palette: false,
+            verbose_filter_log: false,
         }
     }
 
@@ -74,6 +78,7 @@ impl PngOptions {
             reduce_color_type: false,
             strip_metadata: false,
             reduce_palette: false,
+            verbose_filter_log: false,
         }
     }
 
@@ -86,6 +91,7 @@ impl PngOptions {
             reduce_color_type: false,
             strip_metadata: false,
             reduce_palette: false,
+            verbose_filter_log: false,
         }
     }
 }

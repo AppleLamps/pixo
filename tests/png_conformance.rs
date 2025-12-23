@@ -345,6 +345,7 @@ fn test_filter_strategies() {
             reduce_color_type: false,
             strip_metadata: false,
             reduce_palette: false,
+            verbose_filter_log: false,
         };
 
         let result = png::encode_with_options(&pixels, 16, 16, ColorType::Rgb, &options).unwrap();
@@ -486,6 +487,7 @@ fn test_png_compression_regression_rocket() {
         reduce_color_type: false,
         strip_metadata: false,
         reduce_palette: false,
+        verbose_filter_log: false,
     };
 
     let encoded = png::encode_with_options(raw_pixels, width, height, ColorType::Rgb, &options)
@@ -512,6 +514,7 @@ fn test_png_compression_regression_rocket() {
         reduce_color_type: false,
         strip_metadata: false,
         reduce_palette: false,
+        verbose_filter_log: false,
     };
     let encoded_l6 =
         png::encode_with_options(raw_pixels, width, height, ColorType::Rgb, &options_l6)
@@ -567,6 +570,7 @@ fn test_png_compression_regression_rocket_rgba() {
         reduce_color_type: false,
         reduce_palette: false,
         strip_metadata: false,
+        verbose_filter_log: false,
     };
 
     let encoded_rgba =

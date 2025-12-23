@@ -495,6 +495,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     reduce_color_type: args.png_reduce_color,
                     strip_metadata: args.png_strip_metadata,
                     reduce_palette: args.png_reduce_color,
+                    verbose_filter_log: args.verbose,
                 },
             };
             // Allow explicit overrides if preset is provided but user also set flags.
@@ -504,6 +505,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             options.reduce_color_type = args.png_reduce_color;
             options.strip_metadata = args.png_strip_metadata;
             options.reduce_palette = args.png_reduce_color;
+            options.verbose_filter_log = args.verbose;
 
             comprs::png::encode_into(
                 &mut output_data,
