@@ -52,14 +52,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     for fixture in fixtures {
-        let img = image::open(&fixture)?;
-        let (w, h) = img.dimensions();
-        println!("=== {} ({}x{}) ===", fixture.display(), w, h);
+        match image::open(&fixture) {
+            Ok(img) => {
+                let (w, h) = img.dimensions();
+                println!("=== {} ({}x{}) ===", fixture.display(), w, h);
 
-        run_png_section(&img, &fixture, &tmp_dir, &oxipng_bin)?;
-        run_jpeg_section(&img, &fixture, &tmp_dir, &cjpeg_bin)?;
+                run_png_section(&img, &fixture, &tmp_dir, &oxipng_bin)?;
+                run_jpeg_section(&img, &fixture, &tmp_dir, &cjpeg_bin)?;
 
-        println!();
+                println!();
+            }
+            Err(err) => {
+                println!("=== {} ===", fixture.display());
+                println!("Skipped: failed to decode ({err})");
+                println!();
+            }
+        }
     }
 
     Ok(())
