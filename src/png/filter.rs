@@ -183,6 +183,18 @@ pub fn apply_filters(
                     last_adaptive_filter = Some(f);
                 }
             }
+            FilterStrategy::Entropy => {
+                entropy_filter(
+                    row,
+                    if y == 0 { &zero_row[..] } else { prev_row },
+                    bytes_per_pixel,
+                    &mut output,
+                    &mut adaptive_scratch,
+                );
+                if let Some(&f) = output.last() {
+                    last_filter = f;
+                }
+            }
             _ => {
                 let base = output.len();
                 filter_row(
@@ -393,6 +405,69 @@ fn adaptive_filter(
     }
 }
 
+/// Entropy-based filter selection: choose filter minimizing estimated entropy of the filtered row.
+fn entropy_filter(
+    row: &[u8],
+    prev_row: &[u8],
+    bpp: usize,
+    output: &mut Vec<u8>,
+    scratch: &mut AdaptiveScratch,
+) {
+    scratch.clear();
+
+    let mut best_filter = FILTER_NONE;
+    let mut best_score = f64::INFINITY;
+
+    // None
+    scratch.none.extend_from_slice(row);
+    let score = score_entropy(&scratch.none);
+    if score < best_score {
+        best_score = score;
+        best_filter = FILTER_NONE;
+    }
+
+    // Sub
+    filter_sub(row, bpp, &mut scratch.sub);
+    let score = score_entropy(&scratch.sub);
+    if score < best_score {
+        best_score = score;
+        best_filter = FILTER_SUB;
+    }
+
+    // Up
+    filter_up(row, prev_row, &mut scratch.up);
+    let score = score_entropy(&scratch.up);
+    if score < best_score {
+        best_score = score;
+        best_filter = FILTER_UP;
+    }
+
+    // Average
+    filter_average(row, prev_row, bpp, &mut scratch.avg);
+    let score = score_entropy(&scratch.avg);
+    if score < best_score {
+        best_score = score;
+        best_filter = FILTER_AVERAGE;
+    }
+
+    // Paeth
+    filter_paeth(row, prev_row, bpp, &mut scratch.paeth);
+    let score = score_entropy(&scratch.paeth);
+    if score < best_score {
+        best_filter = FILTER_PAETH;
+    }
+
+    output.push(best_filter);
+    match best_filter {
+        FILTER_NONE => output.extend_from_slice(&scratch.none),
+        FILTER_SUB => output.extend_from_slice(&scratch.sub),
+        FILTER_UP => output.extend_from_slice(&scratch.up),
+        FILTER_AVERAGE => output.extend_from_slice(&scratch.avg),
+        FILTER_PAETH => output.extend_from_slice(&scratch.paeth),
+        _ => unreachable!(),
+    }
+}
+
 /// Adaptive filtering with a faster heuristic and early cutoffs.
 fn adaptive_filter_fast(
     row: &[u8],
@@ -478,6 +553,9 @@ fn filter_row(
         FilterStrategy::Paeth => {
             output.push(FILTER_PAETH);
             filter_paeth(row, prev_row, bpp, output);
+        }
+        FilterStrategy::Entropy => {
+            entropy_filter(row, prev_row, bpp, output, scratch);
         }
         FilterStrategy::Adaptive => {
             adaptive_filter(row, prev_row, bpp, output, scratch);
@@ -566,6 +644,27 @@ fn score_filter(filtered: &[u8]) -> u64 {
             .map(|&b| (b as i8).unsigned_abs() as u64)
             .sum()
     }
+}
+
+/// Entropy estimate (bits) for a filtered row, weighted by length.
+fn score_entropy(filtered: &[u8]) -> f64 {
+    let mut freq = [0u32; 256];
+    for &b in filtered {
+        freq[b as usize] += 1;
+    }
+    let len = filtered.len() as f64;
+    if len == 0.0 {
+        return 0.0;
+    }
+    let mut entropy = 0.0;
+    for &count in &freq {
+        if count == 0 {
+            continue;
+        }
+        let p = count as f64 / len;
+        entropy -= p * p.log2();
+    }
+    entropy * len
 }
 
 /// Simple high-entropy detector:

@@ -95,6 +95,8 @@ pub enum FilterStrategy {
     Average,
     /// Always use Paeth filter.
     Paeth,
+    /// Choose best filter per row using entropy scoring (slower, better compression).
+    Entropy,
     /// Choose best filter per row (best compression, slower).
     Adaptive,
     /// Adaptive but with early cut and limited trials (faster).
