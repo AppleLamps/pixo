@@ -39,6 +39,13 @@ struct Args {
     /// Optimize JPEG Huffman tables (smaller files, slower)
     #[arg(long, default_value_t = false)]
     jpeg_optimize_huffman: bool,
+    /// JPEG restart interval in MCUs (1-65535). Use to improve error resilience.
+    #[arg(
+        long,
+        value_parser = clap::value_parser!(u16).range(1..=65535),
+        default_value = "0"
+    )]
+    jpeg_restart_interval: u16,
 
     /// PNG compression level (1-9, higher = smaller file)
     #[arg(short = 'c', long, default_value = "2", value_parser = clap::value_parser!(u8).range(1..=9))]
@@ -557,7 +564,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let options = JpegOptions {
                 quality: args.quality,
                 subsampling: args.subsampling.into(),
-                restart_interval: None,
+                restart_interval: if args.jpeg_restart_interval == 0 {
+                    None
+                } else {
+                    Some(args.jpeg_restart_interval)
+                },
                 optimize_huffman: args.jpeg_optimize_huffman,
             };
             if args.verbose {
