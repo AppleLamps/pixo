@@ -214,6 +214,7 @@ impl JpegOptionsBuilder {
         self
     }
 
+    #[must_use]
     pub fn build(self) -> JpegOptions {
         self.options
     }

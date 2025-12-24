@@ -278,6 +278,7 @@ impl PngOptionsBuilder {
     }
 
     /// Build the configured [`PngOptions`].
+    #[must_use]
     pub fn build(self) -> PngOptions {
         self.options
     }
