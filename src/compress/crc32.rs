@@ -34,6 +34,7 @@ static CRC_TABLES: std::sync::LazyLock<[[u32; 256]; 8]> = std::sync::LazyLock::n
 /// Uses the CRC-32/ISO-HDLC algorithm (polynomial 0x04C11DB7 reflected).
 /// This is the CRC used by PNG, gzip, and many other formats.
 #[inline]
+#[must_use]
 pub fn crc32(data: &[u8]) -> u32 {
     let mut crc = 0xFFFF_FFFFu32;
     let tables = &*CRC_TABLES;
