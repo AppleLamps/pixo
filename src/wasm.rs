@@ -153,7 +153,7 @@ mod tests {
     #[test]
     fn test_encode_png_1x1() {
         let pixels = vec![255, 0, 0, 255]; // 1x1 red RGBA
-        // encode_png(data, w, h, color_type, preset, lossy)
+                                           // encode_png(data, w, h, color_type, preset, lossy)
         let result = encode_png(&pixels, 1, 1, 3, 1, false);
         assert!(result.is_ok());
         let png = result.unwrap();
@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn test_encode_jpeg_1x1() {
         let pixels = vec![255, 0, 0]; // 1x1 red RGB
-        // encode_jpeg(data, w, h, color_type, quality, preset, subsampling_420)
+                                      // encode_jpeg(data, w, h, color_type, quality, preset, subsampling_420)
         let result = encode_jpeg(&pixels, 1, 1, 2, 85, 1, false);
         assert!(result.is_ok());
         let jpeg = result.unwrap();

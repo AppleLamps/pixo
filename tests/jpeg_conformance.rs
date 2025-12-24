@@ -298,8 +298,7 @@ fn test_jpeg_restart_interval_marker_and_decode() {
     let mut opts = jpeg::JpegOptions::fast(80);
     opts.restart_interval = Some(4);
 
-    let jpeg_bytes =
-        jpeg::encode_with_options(&rgb, width, height, ColorType::Rgb, &opts).unwrap();
+    let jpeg_bytes = jpeg::encode_with_options(&rgb, width, height, ColorType::Rgb, &opts).unwrap();
 
     // Ensure DRI marker (0xFFDD) exists
     let mut found_dri = false;
@@ -329,8 +328,7 @@ fn test_jpeg_marker_structure_with_restart() {
     opts.subsampling = jpeg::Subsampling::S420;
     opts.restart_interval = Some(4);
 
-    let jpeg_bytes =
-        jpeg::encode_with_options(&rgb, width, height, ColorType::Rgb, &opts).unwrap();
+    let jpeg_bytes = jpeg::encode_with_options(&rgb, width, height, ColorType::Rgb, &opts).unwrap();
 
     assert!(jpeg_bytes.starts_with(&[0xFF, 0xD8]), "missing SOI");
     assert!(jpeg_bytes.ends_with(&[0xFF, 0xD9]), "missing EOI");
@@ -401,8 +399,7 @@ fn test_jpeg_no_restart_marker_without_interval() {
 
     let opts = jpeg::JpegOptions::fast(80);
 
-    let jpeg_bytes =
-        jpeg::encode_with_options(&rgb, width, height, ColorType::Rgb, &opts).unwrap();
+    let jpeg_bytes = jpeg::encode_with_options(&rgb, width, height, ColorType::Rgb, &opts).unwrap();
 
     assert!(
         !jpeg_bytes.windows(2).any(|w| w == [0xFF, 0xDD]),
@@ -427,8 +424,7 @@ fn test_jpeg_no_trailing_restart_marker_when_divisible() {
     let mut opts = jpeg::JpegOptions::fast(85);
     opts.restart_interval = Some(4); // Exactly matches total MCU count
 
-    let jpeg_bytes =
-        jpeg::encode_with_options(&rgb, width, height, ColorType::Rgb, &opts).unwrap();
+    let jpeg_bytes = jpeg::encode_with_options(&rgb, width, height, ColorType::Rgb, &opts).unwrap();
 
     // Verify EOI is present
     assert!(jpeg_bytes.ends_with(&[0xFF, 0xD9]), "missing EOI");
@@ -438,7 +434,8 @@ fn test_jpeg_no_trailing_restart_marker_when_divisible() {
     let len = jpeg_bytes.len();
     if len >= 4 {
         let before_eoi = &jpeg_bytes[len - 4..len - 2];
-        let is_restart_marker = before_eoi[0] == 0xFF && (before_eoi[1] >= 0xD0 && before_eoi[1] <= 0xD7);
+        let is_restart_marker =
+            before_eoi[0] == 0xFF && (before_eoi[1] >= 0xD0 && before_eoi[1] <= 0xD7);
         assert!(
             !is_restart_marker,
             "Found trailing restart marker {:02X}{:02X} before EOI - should not be present when MCU count is exactly divisible by interval",
@@ -465,8 +462,7 @@ fn test_jpeg_no_trailing_restart_marker_420_divisible() {
     opts.subsampling = jpeg::Subsampling::S420;
     opts.restart_interval = Some(2); // 4 MCUs / 2 = exactly 2 intervals
 
-    let jpeg_bytes =
-        jpeg::encode_with_options(&rgb, width, height, ColorType::Rgb, &opts).unwrap();
+    let jpeg_bytes = jpeg::encode_with_options(&rgb, width, height, ColorType::Rgb, &opts).unwrap();
 
     assert!(jpeg_bytes.ends_with(&[0xFF, 0xD9]), "missing EOI");
 
@@ -474,7 +470,8 @@ fn test_jpeg_no_trailing_restart_marker_420_divisible() {
     let len = jpeg_bytes.len();
     if len >= 4 {
         let before_eoi = &jpeg_bytes[len - 4..len - 2];
-        let is_restart_marker = before_eoi[0] == 0xFF && (before_eoi[1] >= 0xD0 && before_eoi[1] <= 0xD7);
+        let is_restart_marker =
+            before_eoi[0] == 0xFF && (before_eoi[1] >= 0xD0 && before_eoi[1] <= 0xD7);
         assert!(
             !is_restart_marker,
             "Found trailing restart marker before EOI in 4:2:0 mode"
