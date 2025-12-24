@@ -2250,4 +2250,81 @@ mod tests {
         let trimmed = maybe_trim_transparency(&alpha).expect("should trim");
         assert_eq!(trimmed, vec![255u8, 200]);
     }
+
+    fn find_chunk(data: &[u8], name: &[u8; 4]) -> Option<(usize, usize)> {
+        // returns (offset, length)
+        let mut offset = 8; // skip signature
+        while offset + 12 <= data.len() {
+            let len = u32::from_be_bytes(data[offset..offset + 4].try_into().unwrap()) as usize;
+            let chunk_type = &data[offset + 4..offset + 8];
+            if chunk_type == name {
+                return Some((offset, len));
+            }
+            offset += 12 + len; // len + type + data + crc
+        }
+        None
+    }
+
+    #[test]
+    fn test_encode_indexed_bit_depth_1() {
+        // encode_indexed always uses bit depth 8 for palette output (simpler packing).
+        let data = vec![0u8, 1, 0, 1, 0, 1, 0, 1]; // 8 pixels, indices 0/1
+        let palette = [[0u8, 0, 0], [255u8, 255, 255]];
+
+        let png = encode_indexed(&data, 4, 2, &palette, None).unwrap();
+
+        // IHDR bit depth byte remains 8 for indexed encode path
+        assert_eq!(png[24], 8, "bit depth should be 8 for indexed output");
+        assert_eq!(png[25], 3, "color type should be palette (3)");
+
+        // PLTE length should be 2 * 3 = 6 bytes
+        let (plte_offset, plte_len) = find_chunk(&png, b"PLTE").expect("PLTE missing");
+        assert_eq!(plte_len, 6);
+        // chunk length field should match
+        assert_eq!(
+            &png[plte_offset..plte_offset + 4],
+            &6u32.to_be_bytes(),
+            "PLTE length field mismatch"
+        );
+    }
+
+    #[test]
+    fn test_encode_indexed_bit_depth_2_and_trns() {
+        // encode_indexed uses bit depth 8; include tRNS shorter than palette.
+        let data = vec![0u8, 1, 2, 3];
+        let palette = [[0u8, 0, 0], [255u8, 0, 0], [0u8, 255, 0], [0u8, 0, 255]];
+        let trns = [0u8, 128]; // first entry fully transparent, second semi, rest implied opaque
+
+        let png = encode_indexed(&data, 2, 2, &palette, Some(&trns)).unwrap();
+
+        assert_eq!(png[24], 8, "bit depth should be 8 for indexed output");
+        assert_eq!(png[25], 3, "color type should be palette (3)");
+
+        let (plte_offset, plte_len) = find_chunk(&png, b"PLTE").expect("PLTE missing");
+        assert_eq!(plte_len, 12, "PLTE length should be 4*3");
+        assert_eq!(
+            &png[plte_offset..plte_offset + 4],
+            &12u32.to_be_bytes(),
+            "PLTE length field mismatch"
+        );
+
+        let (_trns_offset, trns_len) = find_chunk(&png, b"tRNS").expect("tRNS missing");
+        assert_eq!(
+            trns_len,
+            trns.len(),
+            "tRNS length should match provided alpha"
+        );
+    }
+
+    #[test]
+    fn test_encode_indexed_invalid_palette_length() {
+        // palette > 256 should be rejected
+        let data = vec![0u8; 4];
+        let palette = vec![[0u8, 0, 0]; 300];
+        let err = encode_indexed(&data, 2, 2, &palette, None).unwrap_err();
+        assert!(
+            matches!(err, Error::CompressionError(_)),
+            "expected CompressionError for oversized palette"
+        );
+    }
 }
