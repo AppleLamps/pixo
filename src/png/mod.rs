@@ -2327,4 +2327,17 @@ mod tests {
             "expected CompressionError for oversized palette"
         );
     }
+
+    #[test]
+    fn test_encode_indexed_invalid_trns_length() {
+        // transparency length exceeding palette length should be rejected
+        let data = vec![0u8; 4];
+        let palette = vec![[0u8, 0, 0]; 2];
+        let trns = vec![0u8; 3]; // longer than palette
+        let err = encode_indexed(&data, 2, 2, &palette, Some(&trns)).unwrap_err();
+        assert!(
+            matches!(err, Error::CompressionError(_)),
+            "expected CompressionError for tRNS longer than palette"
+        );
+    }
 }
