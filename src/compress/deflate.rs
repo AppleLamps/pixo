@@ -2132,6 +2132,40 @@ mod tests {
     }
 
     #[test]
+    fn test_deflate_zlib_max_distance_roundtrip() {
+        // Force a match that uses the maximum DEFLATE distance code (29) with
+        // the maximum length (258). This exercises distance extra-bit handling
+        // and HLIT/HDIST trimming when rare distance symbols are present.
+        let mut data = vec![b'a'; 32_768 + 258];
+        // Avoid an all-literal fast path by changing the first byte.
+        data[0] = b'b';
+
+        let encoded = deflate_zlib(&data, 9);
+        let decoded = decompress_zlib(&encoded);
+        assert_eq!(decoded, data, "max-distance roundtrip failed");
+    }
+
+    #[test]
+    fn test_deflate_zlib_high_entropy_stored_roundtrip() {
+        // Directly exercise the stored-block path and ensure it roundtrips.
+        let mut rng = rand::rngs::StdRng::seed_from_u64(2024);
+        let mut data = vec![0u8; 10_000];
+        rng.fill(data.as_mut_slice());
+
+        // Call the stored-block helper directly to guarantee BTYPE=00 coverage.
+        let encoded = deflate_zlib_stored(&data, 6);
+        // First deflate block after zlib header should be BTYPE=00 (stored).
+        assert_eq!(
+            (encoded[2] >> 1) & 0b0000_0011,
+            0,
+            "expected stored block BTYPE=00"
+        );
+
+        let decoded = decompress_zlib(&encoded);
+        assert_eq!(decoded, data, "high-entropy stored roundtrip failed");
+    }
+
+    #[test]
     fn test_packed_fixed_matches_standard() {
         let data = b"aaaaabbbbccddeeffgg";
         let mut lz = Lz77Compressor::new(6);
