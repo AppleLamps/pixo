@@ -32,6 +32,7 @@ pub fn adler32(data: &[u8]) -> u32 {
             // Safety: We've verified SSSE3 is available
             return unsafe { x86_64::adler32_ssse3(data) };
         }
+        return fallback::adler32(data);
     }
 
     #[cfg(target_arch = "aarch64")]
@@ -70,6 +71,7 @@ pub fn match_length(data: &[u8], pos1: usize, pos2: usize, max_len: usize) -> us
             // Safety: We've verified SSE2 is available
             return unsafe { x86_64::match_length_sse2(data, pos1, pos2, max_len) };
         }
+        return fallback::match_length(data, pos1, pos2, max_len);
     }
 
     #[cfg(target_arch = "aarch64")]
@@ -95,6 +97,7 @@ pub fn score_filter(filtered: &[u8]) -> u64 {
             // Safety: We've verified SSE2 is available
             return unsafe { x86_64::score_filter_sse2(filtered) };
         }
+        return fallback::score_filter(filtered);
     }
 
     #[cfg(target_arch = "aarch64")]
@@ -122,6 +125,8 @@ pub fn filter_sub(row: &[u8], bpp: usize, output: &mut Vec<u8>) {
             unsafe { x86_64::filter_sub_sse2(row, bpp, output) };
             return;
         }
+        fallback::filter_sub(row, bpp, output);
+        return;
     }
 
     #[cfg(target_arch = "aarch64")]
@@ -149,6 +154,8 @@ pub fn filter_up(row: &[u8], prev_row: &[u8], output: &mut Vec<u8>) {
             unsafe { x86_64::filter_up_sse2(row, prev_row, output) };
             return;
         }
+        fallback::filter_up(row, prev_row, output);
+        return;
     }
 
     #[cfg(target_arch = "aarch64")]
@@ -171,6 +178,8 @@ pub fn filter_average(row: &[u8], prev_row: &[u8], bpp: usize, output: &mut Vec<
             unsafe { x86_64::filter_average_avx2(row, prev_row, bpp, output) };
             return;
         }
+        fallback::filter_average(row, prev_row, bpp, output);
+        return;
     }
 
     #[cfg(target_arch = "aarch64")]
