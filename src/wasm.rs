@@ -37,6 +37,11 @@
 //! const jpegBytes = encodeJpeg(rgb, width, height, 2, 85, 1, true);
 //! ```
 
+// Use a tiny allocator to shrink the wasm binary.
+#[cfg(all(target_arch = "wasm32", feature = "wasm"))]
+#[global_allocator]
+static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+
 use wasm_bindgen::prelude::*;
 
 use crate::color::ColorType;
