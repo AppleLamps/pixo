@@ -1639,4 +1639,22 @@ mod tests {
         assert!(output.capacity() >= first_cap);
         assert_eq!(&output[0..2], &SOI.to_be_bytes());
     }
+
+    #[test]
+    fn test_jpeg_options_builder_with_preset_override() {
+        let opts = JpegOptions::builder()
+            .preset(2) // max
+            .quality(90)
+            .subsampling(Subsampling::S444)
+            .optimize_huffman(false)
+            .progressive(false)
+            .trellis_quant(false)
+            .build();
+
+        assert_eq!(opts.quality, 90);
+        assert_eq!(opts.subsampling, Subsampling::S444);
+        assert!(!opts.optimize_huffman);
+        assert!(!opts.progressive);
+        assert!(!opts.trellis_quant);
+    }
 }

@@ -2025,6 +2025,28 @@ mod tests {
     }
 
     #[test]
+    fn test_builder_overrides_after_preset() {
+        let opts = PngOptions::builder()
+            .preset(2) // max
+            .compression_level(3)
+            .filter_strategy(FilterStrategy::AdaptiveFast)
+            .optimize_alpha(false)
+            .reduce_color_type(false)
+            .strip_metadata(false)
+            .reduce_palette(false)
+            .quantization_mode(QuantizationMode::Off)
+            .build();
+
+        assert_eq!(opts.compression_level, 3);
+        assert_eq!(opts.filter_strategy, FilterStrategy::AdaptiveFast);
+        assert!(!opts.optimize_alpha);
+        assert!(!opts.reduce_color_type);
+        assert!(!opts.strip_metadata);
+        assert!(!opts.reduce_palette);
+        assert_eq!(opts.quantization.mode, QuantizationMode::Off);
+    }
+
+    #[test]
     fn test_encode_2x2_checkerboard() {
         // 2x2 black and white checkerboard
         let pixels = vec![
