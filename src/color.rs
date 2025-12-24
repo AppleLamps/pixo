@@ -128,4 +128,13 @@ mod tests {
         assert!(cb < 128);
         assert!(cr > 200);
     }
+
+    #[test]
+    fn test_color_type_try_from() {
+        assert!(matches!(ColorType::try_from(0), Ok(ColorType::Gray)));
+        assert!(matches!(ColorType::try_from(1), Ok(ColorType::GrayAlpha)));
+        assert!(matches!(ColorType::try_from(2), Ok(ColorType::Rgb)));
+        assert!(matches!(ColorType::try_from(3), Ok(ColorType::Rgba)));
+        assert!(ColorType::try_from(99).is_err());
+    }
 }
