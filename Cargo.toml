@@ -53,6 +53,10 @@ flate2 = "1.0"
 url = { version = "=2.4.1", default-features = true }
 imagequant = "4"
 jpeg-decoder = "0.3"
+jpeg-encoder = { version = "0.6", features = ["simd"] }
+lodepng = "3"
+libdeflater = "1"
+zopfli = "0.8"
 
 
 [[bench]]
