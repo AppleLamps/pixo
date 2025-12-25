@@ -31,7 +31,8 @@ fn test_adler32_simd_vs_fallback() {
         let expected = fallback::adler32(&data);
         let actual = comprs::simd::adler32(&data);
         assert_eq!(
-            expected, actual,
+            expected,
+            actual,
             "Adler-32 mismatch for {} bytes",
             data.len()
         );
@@ -76,8 +77,7 @@ fn test_match_length_simd_vs_fallback() {
         let actual = comprs::simd::match_length(&data, pos1, pos2, max_len);
         assert_eq!(
             expected, actual,
-            "match_length mismatch at pos1={}, pos2={}, max_len={}",
-            pos1, pos2, max_len
+            "match_length mismatch at pos1={pos1}, pos2={pos2}, max_len={max_len}"
         );
     }
 }
@@ -100,7 +100,8 @@ fn test_score_filter_simd_vs_fallback() {
         let expected = fallback::score_filter(&data);
         let actual = comprs::simd::score_filter(&data);
         assert_eq!(
-            expected, actual,
+            expected,
+            actual,
             "score_filter mismatch for {} bytes",
             data.len()
         );
@@ -125,8 +126,7 @@ fn test_filter_sub_simd_vs_fallback() {
 
             assert_eq!(
                 expected_output, actual_output,
-                "filter_sub mismatch for bpp={}, width={}",
-                bpp, width
+                "filter_sub mismatch for bpp={bpp}, width={width}"
             );
         }
     }
@@ -151,8 +151,7 @@ fn test_filter_up_simd_vs_fallback() {
 
         assert_eq!(
             expected_output, actual_output,
-            "filter_up mismatch for width={}",
-            width
+            "filter_up mismatch for width={width}"
         );
     }
 }
@@ -177,8 +176,7 @@ fn test_filter_average_simd_vs_fallback() {
 
             assert_eq!(
                 expected_output, actual_output,
-                "filter_average mismatch for bpp={}, width={}",
-                bpp, width
+                "filter_average mismatch for bpp={bpp}, width={width}"
             );
         }
     }
@@ -204,8 +202,7 @@ fn test_filter_paeth_simd_vs_fallback() {
 
             assert_eq!(
                 expected_output, actual_output,
-                "filter_paeth mismatch for bpp={}, width={}",
-                bpp, width
+                "filter_paeth mismatch for bpp={bpp}, width={width}"
             );
         }
     }
