@@ -1,6 +1,6 @@
 # The DEFLATE Algorithm
 
-Every time you download a webpage, unzip a file, or view a PNG image, DEFLATE is working behind the scenes. It pairs LZ77 back-references with Huffman coding and (in this library) can use fixed or dynamic Huffman tables plus an optional optimal parser for even smaller output.
+Every time you download a webpage, unzip a file, or view a PNG image, DEFLATE is working behind the scenes. This 1996 algorithm compresses the Linux kernel source from **1.4 GB to 140 MB** — a 10x reduction! How does it achieve this?
 
 The core is a two-stage approach: first find repeated patterns, then encode them optimally.
 
