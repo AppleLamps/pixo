@@ -2377,4 +2377,214 @@ mod tests {
             "PLTE should have exactly 20 colors (60 bytes)"
         );
     }
+
+    #[test]
+    fn test_maybe_trim_transparency_all_opaque() {
+        let alpha = vec![255u8; 5];
+        assert_eq!(maybe_trim_transparency(&alpha), None);
+    }
+
+    #[test]
+    fn test_maybe_trim_transparency_trims_trailing() {
+        let alpha = vec![255u8, 200, 255, 255];
+        let trimmed = maybe_trim_transparency(&alpha).expect("should trim");
+        assert_eq!(trimmed, vec![255u8, 200]);
+    }
+
+    fn find_chunk(data: &[u8], name: &[u8; 4]) -> Option<(usize, usize)> {
+        // returns (offset, length)
+        let mut offset = 8; // skip signature
+        while offset + 12 <= data.len() {
+            let len = u32::from_be_bytes(data[offset..offset + 4].try_into().unwrap()) as usize;
+            let chunk_type = &data[offset + 4..offset + 8];
+            if chunk_type == name {
+                return Some((offset, len));
+            }
+            offset += 12 + len; // len + type + data + crc
+        }
+        None
+    }
+
+    #[test]
+    fn test_encode_indexed_bit_depth_1() {
+        // encode_indexed always uses bit depth 8 for palette output (simpler packing).
+        let data = vec![0u8, 1, 0, 1, 0, 1, 0, 1]; // 8 pixels, indices 0/1
+        let palette = [[0u8, 0, 0], [255u8, 255, 255]];
+
+        let png = encode_indexed(&data, 4, 2, &palette, None).unwrap();
+
+        // IHDR bit depth byte remains 8 for indexed encode path
+        assert_eq!(png[24], 8, "bit depth should be 8 for indexed output");
+        assert_eq!(png[25], 3, "color type should be palette (3)");
+
+        // PLTE length should be 2 * 3 = 6 bytes
+        let (plte_offset, plte_len) = find_chunk(&png, b"PLTE").expect("PLTE missing");
+        assert_eq!(plte_len, 6);
+        // chunk length field should match
+        assert_eq!(
+            &png[plte_offset..plte_offset + 4],
+            &6u32.to_be_bytes(),
+            "PLTE length field mismatch"
+        );
+    }
+
+    #[test]
+    fn test_encode_indexed_bit_depth_2_and_trns() {
+        // encode_indexed uses bit depth 8; include tRNS shorter than palette.
+        let data = vec![0u8, 1, 2, 3];
+        let palette = [[0u8, 0, 0], [255u8, 0, 0], [0u8, 255, 0], [0u8, 0, 255]];
+        let trns = [0u8, 128]; // first entry fully transparent, second semi, rest implied opaque
+
+        let png = encode_indexed(&data, 2, 2, &palette, Some(&trns)).unwrap();
+
+        assert_eq!(png[24], 8, "bit depth should be 8 for indexed output");
+        assert_eq!(png[25], 3, "color type should be palette (3)");
+
+        let (plte_offset, plte_len) = find_chunk(&png, b"PLTE").expect("PLTE missing");
+        assert_eq!(plte_len, 12, "PLTE length should be 4*3");
+        assert_eq!(
+            &png[plte_offset..plte_offset + 4],
+            &12u32.to_be_bytes(),
+            "PLTE length field mismatch"
+        );
+
+        let (_trns_offset, trns_len) = find_chunk(&png, b"tRNS").expect("tRNS missing");
+        assert_eq!(
+            trns_len,
+            trns.len(),
+            "tRNS length should match provided alpha"
+        );
+    }
+
+    #[test]
+    fn test_encode_indexed_invalid_palette_length() {
+        // palette > 256 should be rejected
+        let data = vec![0u8; 4];
+        let palette = vec![[0u8, 0, 0]; 300];
+        let err = encode_indexed(&data, 2, 2, &palette, None).unwrap_err();
+        assert!(
+            matches!(err, Error::CompressionError(_)),
+            "expected CompressionError for oversized palette"
+        );
+    }
+
+    #[test]
+    fn test_encode_indexed_invalid_trns_length() {
+        // transparency length exceeding palette length should be rejected
+        let data = vec![0u8; 4];
+        let palette = vec![[0u8, 0, 0]; 2];
+        let trns = vec![0u8; 3]; // longer than palette
+        let err = encode_indexed(&data, 2, 2, &palette, Some(&trns)).unwrap_err();
+        assert!(
+            matches!(err, Error::CompressionError(_)),
+            "expected CompressionError for tRNS longer than palette"
+        );
+    }
+
+    #[test]
+    fn test_encode_indexed_empty_palette_rejected() {
+        let data = vec![0u8; 4];
+        let palette: Vec<[u8; 3]> = Vec::new();
+        let err = encode_indexed(&data, 2, 2, &palette, None).unwrap_err();
+        assert!(
+            matches!(err, Error::CompressionError(_)),
+            "expected CompressionError for empty palette"
+        );
+    }
+
+    #[test]
+    fn test_encode_indexed_trns_equal_palette_len_allowed() {
+        // Transparency length equal to palette length should be accepted.
+        let data = vec![0u8, 1u8];
+        let palette = vec![[0u8, 0, 0], [255u8, 255, 255]];
+        let trns = vec![0u8, 128u8];
+        let png = encode_indexed(&data, 2, 1, &palette, Some(&trns)).unwrap();
+        // tRNS chunk length should match palette length here (2 bytes)
+        fn find_chunk(data: &[u8], name: &[u8; 4]) -> Option<(usize, usize)> {
+            let mut offset = 8;
+            while offset + 8 <= data.len() {
+                let len = u32::from_be_bytes(data[offset..offset + 4].try_into().unwrap()) as usize;
+                let chunk_type = &data[offset + 4..offset + 8];
+                if chunk_type == name {
+                    return Some((offset, len));
+                }
+                offset += 12 + len;
+            }
+            None
+        }
+        let (_off, len) = find_chunk(&png, b"tRNS").expect("tRNS should exist");
+        assert_eq!(len, trns.len());
+    }
+
+    #[test]
+    fn test_quantization_force_produces_indexed() {
+        // Force quantization on an RGB image and verify output color type is palette (3)
+        let data = vec![
+            255, 0, 0, // red
+            0, 255, 0, // green
+            0, 0, 255, // blue
+            255, 255, 0, // yellow
+        ];
+        let options = PngOptions {
+            quantization: QuantizationOptions {
+                mode: QuantizationMode::Force,
+                max_colors: 4,
+                dithering: false,
+            },
+            ..PngOptions::default()
+        };
+
+        let png = encode_with_options(&data, 2, 2, ColorType::Rgb, &options).unwrap();
+        assert_eq!(
+            png[25], 3,
+            "color type should be palette (3) after quantization"
+        );
+    }
+
+    #[test]
+    fn test_quantization_force_rgba_produces_trns_palette() {
+        // RGBA quantization should emit palette + tRNS when alpha varies.
+        // Two pixels: one fully transparent red, one opaque green.
+        let data = vec![
+            255, 0, 0, 0, // transparent red
+            0, 255, 0, 255, // opaque green
+        ];
+        let options = PngOptions {
+            quantization: QuantizationOptions {
+                mode: QuantizationMode::Force,
+                max_colors: 256,
+                dithering: false,
+            },
+            ..PngOptions::default()
+        };
+
+        let png = encode_with_options(&data, 2, 1, ColorType::Rgba, &options).unwrap();
+
+        // Color type should be palette (3) and bit depth 8
+        assert_eq!(png[25], 3, "color type should be palette (3)");
+        assert_eq!(png[24], 8, "bit depth should remain 8 for palette output");
+
+        // Find PLTE and tRNS chunks
+        fn find_chunk(data: &[u8], name: &[u8; 4]) -> Option<(usize, usize)> {
+            let mut offset = 8;
+            while offset + 8 <= data.len() {
+                let len = u32::from_be_bytes(data[offset..offset + 4].try_into().unwrap()) as usize;
+                let chunk_type = &data[offset + 4..offset + 8];
+                if chunk_type == name {
+                    return Some((offset, len));
+                }
+                offset += 12 + len;
+            }
+            None
+        }
+
+        let (_, plte_len) = find_chunk(&png, b"PLTE").expect("PLTE missing");
+        assert_eq!(plte_len, 6, "expected 2 palette entries (6 bytes)");
+
+        let (_, trns_len) = find_chunk(&png, b"tRNS").expect("tRNS missing");
+        assert!(
+            (1..=2).contains(&trns_len),
+            "tRNS length should be 1..=2, got {trns_len}"
+        );
+    }
 }

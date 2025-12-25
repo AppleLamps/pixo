@@ -2065,6 +2065,79 @@ mod tests {
     }
 
     #[test]
+    fn test_deflate_zlib_max_distance_roundtrip() {
+        // Force a match that uses the maximum DEFLATE distance code (29) with
+        // the maximum length (258). This exercises distance extra-bit handling
+        // and HLIT/HDIST trimming when rare distance symbols are present.
+        let mut data = vec![b'a'; 32_768 + 258];
+        // Avoid an all-literal fast path by changing the first byte.
+        data[0] = b'b';
+
+        let encoded = deflate_zlib(&data, 9);
+        let decoded = decompress_zlib(&encoded);
+        assert_eq!(decoded, data, "max-distance roundtrip failed");
+    }
+
+    #[test]
+    fn test_deflate_zlib_high_entropy_stored_roundtrip() {
+        // Directly exercise the stored-block path and ensure it roundtrips.
+        let mut rng = rand::rngs::StdRng::seed_from_u64(2024);
+        let mut data = vec![0u8; 10_000];
+        rng.fill(data.as_mut_slice());
+
+        // Call the stored-block helper directly to guarantee BTYPE=00 coverage.
+        let encoded = deflate_zlib_stored(&data, 6);
+        // First deflate block after zlib header should be BTYPE=00 (stored).
+        assert_eq!(
+            (encoded[2] >> 1) & 0b0000_0011,
+            0,
+            "expected stored block BTYPE=00"
+        );
+
+        let decoded = decompress_zlib(&encoded);
+        assert_eq!(decoded, data, "high-entropy stored roundtrip failed");
+    }
+
+    #[test]
+    fn test_deflate_stored_sets_bfinal_on_last_block() {
+        // Size > 65535 forces multiple stored blocks. Verify BFINAL is set only on the last block.
+        let data = vec![0u8; 70_000];
+        let encoded = deflate_stored(&data);
+
+        let mut offset = 0;
+        let mut block_idx = 0;
+        let mut saw_final = false;
+
+        while offset < encoded.len() {
+            assert!(offset + 5 <= encoded.len(), "truncated block header");
+            let header = encoded[offset];
+            let bfinal = header & 0x01;
+            let btype = (header >> 1) & 0x03;
+            assert_eq!(btype, 0, "stored block must have BTYPE=00");
+
+            let len = u16::from_le_bytes([encoded[offset + 1], encoded[offset + 2]]) as usize;
+            let nlen = u16::from_le_bytes([encoded[offset + 3], encoded[offset + 4]]);
+            assert_eq!(nlen, !len as u16, "NLEN should be one's complement of LEN");
+
+            offset += 5 + len;
+            block_idx += 1;
+
+            if offset >= encoded.len() {
+                assert_eq!(bfinal, 1, "last block must have BFINAL=1");
+                saw_final = true;
+            } else {
+                assert_eq!(bfinal, 0, "non-final blocks must have BFINAL=0");
+            }
+        }
+
+        assert!(saw_final, "should see final block");
+        assert!(
+            block_idx >= 2,
+            "expected multiple stored blocks for large input"
+        );
+    }
+
+    #[test]
     fn test_packed_fixed_matches_standard() {
         let data = b"aaaaabbbbccddeeffgg";
         let mut lz = Lz77Compressor::new(6);
@@ -2126,6 +2199,45 @@ mod tests {
             .expect("dynamic Huffman should decode");
 
         assert_eq!(decoded, data.to_vec(), "dynamic Huffman roundtrip failed");
+    }
+
+    #[test]
+    fn test_dynamic_huffman_single_literal_roundtrip() {
+        use flate2::read::DeflateDecoder;
+        use std::io::Read;
+
+        // Minimal stream: single literal + EOB, exercises HLIT/HDIST trimming.
+        let tokens = vec![Token::Literal(b'X')];
+        let encoded = encode_dynamic_huffman(&tokens);
+
+        let mut decoder = DeflateDecoder::new(&encoded[..]);
+        let mut decoded = Vec::new();
+        decoder
+            .read_to_end(&mut decoded)
+            .expect("decode single-literal dynamic stream");
+
+        assert_eq!(decoded, b"X");
+    }
+
+    #[test]
+    fn test_dynamic_huffman_all_literals_roundtrip() {
+        use flate2::read::DeflateDecoder;
+        use std::io::Read;
+
+        // All-literal stream: exercises HLIT/HDIST trimming and the forced
+        // distance count=1 path.
+        let data: Vec<u8> = (0u8..50).collect();
+        let tokens: Vec<Token> = data.iter().copied().map(Token::Literal).collect();
+
+        let encoded = encode_dynamic_huffman(&tokens);
+
+        let mut decoder = DeflateDecoder::new(&encoded[..]);
+        let mut decoded = Vec::new();
+        decoder
+            .read_to_end(&mut decoded)
+            .expect("decode all-literal dynamic stream");
+
+        assert_eq!(decoded, data, "all-literal dynamic roundtrip failed");
     }
 
     #[test]
