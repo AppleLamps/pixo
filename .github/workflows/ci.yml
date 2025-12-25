@@ -248,7 +248,7 @@ jobs:
             /usr/local/bin/cjpeg
             /usr/local/bin/pngquant
             /usr/local/bin/oxipng
-          key: compression-tools-v2-${{ runner.os }}
+          key: compression-tools-v3-${{ runner.os }}
 
       # Install mozjpeg (cjpeg)
       - name: Install mozjpeg
