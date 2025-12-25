@@ -1348,11 +1348,6 @@ fn encode_scan(
         }
     };
 
-    #[inline]
-    fn is_multiple(dividend: u32, divisor: u32) -> bool {
-        dividend.checked_rem(divisor) == Some(0)
-    }
-
     // Process blocks
     match (color_type, subsampling) {
         (ColorType::Gray, _) => {
