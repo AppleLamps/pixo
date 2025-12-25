@@ -259,7 +259,8 @@ jobs:
           git clone --depth 1 https://github.com/mozilla/mozjpeg.git /tmp/mozjpeg
           cd /tmp/mozjpeg
           mkdir build && cd build
-          cmake -G"Unix Makefiles" -DCMAKE_INSTALL_PREFIX=/usr/local ..
+          # Disable shared libs to avoid PIC issues with SIMD assembly on x86_64
+          cmake -G"Unix Makefiles" -DCMAKE_INSTALL_PREFIX=/usr/local -DENABLE_SHARED=FALSE ..
           make -j$(nproc)
           sudo make install
           echo "mozjpeg installed: $(cjpeg -version 2>&1 | head -1 || echo 'installed')"
