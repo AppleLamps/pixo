@@ -113,9 +113,9 @@ pub fn match_length(data: &[u8], pos1: usize, pos2: usize, max_len: usize) -> us
     {
         match *X86_SIMD_LEVEL {
             X86SimdLevel::Avx2 => unsafe { x86_64::match_length_avx2(data, pos1, pos2, max_len) },
-            X86SimdLevel::Ssse3 | X86SimdLevel::Sse2 => {
-                unsafe { x86_64::match_length_sse2(data, pos1, pos2, max_len) }
-            }
+            X86SimdLevel::Ssse3 | X86SimdLevel::Sse2 => unsafe {
+                x86_64::match_length_sse2(data, pos1, pos2, max_len)
+            },
             X86SimdLevel::Scalar => fallback::match_length(data, pos1, pos2, max_len),
         }
     }
@@ -136,9 +136,9 @@ pub fn score_filter(filtered: &[u8]) -> u64 {
     {
         match *X86_SIMD_LEVEL {
             X86SimdLevel::Avx2 => unsafe { x86_64::score_filter_avx2(filtered) },
-            X86SimdLevel::Ssse3 | X86SimdLevel::Sse2 => {
-                unsafe { x86_64::score_filter_sse2(filtered) }
-            }
+            X86SimdLevel::Ssse3 | X86SimdLevel::Sse2 => unsafe {
+                x86_64::score_filter_sse2(filtered)
+            },
             X86SimdLevel::Scalar => fallback::score_filter(filtered),
         }
     }
@@ -159,9 +159,9 @@ pub fn filter_sub(row: &[u8], bpp: usize, output: &mut Vec<u8>) {
     {
         match *X86_SIMD_LEVEL {
             X86SimdLevel::Avx2 => unsafe { x86_64::filter_sub_avx2(row, bpp, output) },
-            X86SimdLevel::Ssse3 | X86SimdLevel::Sse2 => {
-                unsafe { x86_64::filter_sub_sse2(row, bpp, output) }
-            }
+            X86SimdLevel::Ssse3 | X86SimdLevel::Sse2 => unsafe {
+                x86_64::filter_sub_sse2(row, bpp, output)
+            },
             X86SimdLevel::Scalar => fallback::filter_sub(row, bpp, output),
         }
         return;
@@ -183,9 +183,9 @@ pub fn filter_up(row: &[u8], prev_row: &[u8], output: &mut Vec<u8>) {
     {
         match *X86_SIMD_LEVEL {
             X86SimdLevel::Avx2 => unsafe { x86_64::filter_up_avx2(row, prev_row, output) },
-            X86SimdLevel::Ssse3 | X86SimdLevel::Sse2 => {
-                unsafe { x86_64::filter_up_sse2(row, prev_row, output) }
-            }
+            X86SimdLevel::Ssse3 | X86SimdLevel::Sse2 => unsafe {
+                x86_64::filter_up_sse2(row, prev_row, output)
+            },
             X86SimdLevel::Scalar => fallback::filter_up(row, prev_row, output),
         }
         return;
@@ -206,9 +206,9 @@ pub fn filter_average(row: &[u8], prev_row: &[u8], bpp: usize, output: &mut Vec<
     #[cfg(target_arch = "x86_64")]
     {
         match *X86_SIMD_LEVEL {
-            X86SimdLevel::Avx2 => {
-                unsafe { x86_64::filter_average_avx2(row, prev_row, bpp, output) }
-            }
+            X86SimdLevel::Avx2 => unsafe {
+                x86_64::filter_average_avx2(row, prev_row, bpp, output)
+            },
             _ => fallback::filter_average(row, prev_row, bpp, output),
         }
         return;

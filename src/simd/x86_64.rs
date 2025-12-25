@@ -67,7 +67,11 @@ pub unsafe fn crc32_pclmulqdq(data: &[u8]) -> u32 {
 
         // Fold 64 bytes at a time
         while remaining.len() >= 64 {
-            x0 = fold_16(x0, _mm_loadu_si128(remaining.as_ptr() as *const __m128i), k1k2);
+            x0 = fold_16(
+                x0,
+                _mm_loadu_si128(remaining.as_ptr() as *const __m128i),
+                k1k2,
+            );
             x1 = fold_16(
                 x1,
                 _mm_loadu_si128(remaining.as_ptr().add(16) as *const __m128i),
@@ -160,11 +164,7 @@ unsafe fn reduce_128_to_32(x: __m128i) -> u32 {
         poly_mu,
         0x00,
     );
-    let t2 = _mm_clmulepi64_si128(
-        _mm_and_si128(t1, _mm_set_epi32(0, 0, 0, -1)),
-        poly_mu,
-        0x10,
-    );
+    let t2 = _mm_clmulepi64_si128(_mm_and_si128(t1, _mm_set_epi32(0, 0, 0, -1)), poly_mu, 0x10);
     let result = _mm_xor_si128(folded32, t2);
 
     _mm_extract_epi32(result, 1) as u32

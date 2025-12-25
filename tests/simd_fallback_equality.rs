@@ -31,7 +31,8 @@ fn test_adler32_simd_vs_fallback() {
         let expected = fallback::adler32(&data);
         let actual = comprs::simd::adler32(&data);
         assert_eq!(
-            expected, actual,
+            expected,
+            actual,
             "Adler-32 mismatch for {} bytes",
             data.len()
         );
@@ -100,7 +101,8 @@ fn test_score_filter_simd_vs_fallback() {
         let expected = fallback::score_filter(&data);
         let actual = comprs::simd::score_filter(&data);
         assert_eq!(
-            expected, actual,
+            expected,
+            actual,
             "score_filter mismatch for {} bytes",
             data.len()
         );
