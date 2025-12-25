@@ -28,7 +28,7 @@ This document provides a comprehensive comparison of codebase sizes between `com
 
 | Library | Total LOC | Core Code | Test Code | Test % | Dependencies | Formats |
 |---------|-----------|-----------|-----------|--------|--------------|---------|
-| **comprs** | 16,340 | 8,674 | 5,766 | **35.3%** | 0 (zero deps) | PNG, JPEG |
+| **comprs** | 16,340 | 8,674 | 5,766 | **35.3%** (78% line coverage) | 0 (zero deps) | PNG, JPEG |
 | jpeg-encoder | 3,642 | 2,846 | 796 | 21.9% | 0 | JPEG only |
 | miniz_oxide | 7,805 | 4,501 | 3,304 | 42.3% | 0 | DEFLATE only |
 | zopfli | 3,449 | 3,337 | 112 | 3.2% | 0 | DEFLATE only |
@@ -56,7 +56,7 @@ This document provides a comprehensive comparison of codebase sizes between `com
 
 ### Key Findings
 
-1. **comprs has the highest test ratio (35.3%) among zero-dependency multi-format libraries, with 76% actual code coverage**
+1. **comprs has the highest test ratio (35.3%) among zero-dependency multi-format libraries, with 78% actual code coverage**
 2. **comprs is ~13× smaller than mozjpeg** while providing comparable JPEG encoding
 3. **The compression gap comes from SIMD**: mozjpeg has 50K+ lines of hand-tuned assembly; comprs has 1.3K lines of Rust SIMD
 4. **sharp appears small (10K) but depends on libvips (194K LOC)**
@@ -238,7 +238,8 @@ Test Code: 5,766 LOC (35.3%)
 ├── tests/:            3,235 LOC
 └── benches/:          1,928 LOC
 
-#[test] functions: 242
+#[test] functions: 335
+CLI unit tests: 27
 Playwright e2e tests: 22
 Files with colocated tests: 18
 ```
@@ -425,7 +426,7 @@ mod aarch64 {
 
 | Library | LOC/Test | Interpretation |
 |---------|----------|----------------|
-| **comprs** | **54** | Well-tested |
+| **comprs** | **46** | Well-tested |
 | oxipng | 33 | Very well-tested (uses C deps) |
 | image | 116 | Less tested |
 | jpeg-encoder | 145 | Moderately tested |
@@ -452,7 +453,7 @@ mod aarch64 {
 
 The AI-assisted approach traded decades of low-level optimization for:
 - Modern safety guarantees
-- High test coverage (35% test ratio, 76% line coverage)
+- High test coverage (35% test ratio, 78% line coverage)
 - WASM compatibility
 - Maintainable codebase
 
@@ -559,7 +560,7 @@ compiled to WebAssembly via Emscripten.
 | Rank | Library | Test % | Tests | Notes |
 |------|---------|--------|-------|-------|
 | 1 | miniz_oxide | 42.3% | 61 | DEFLATE only |
-| 2 | **comprs** | **35.3%** | **242** | **PNG + JPEG, zero deps** |
+| 2 | **comprs** | **35.3%** | **357** | **PNG + JPEG, zero deps** |
 | 3 | image-png | 34.3% | 90 | PNG only |
 | 4 | flate2-rs | 28.3% | 62 | Wrapper |
 | 5 | jpeg-encoder | 21.9% | 29 | JPEG only |
@@ -571,7 +572,7 @@ compiled to WebAssembly via Emscripten.
 | Rank | Library | LOC/Test | Interpretation |
 |------|---------|----------|----------------|
 | 1 | oxipng | 33 | Excellent (C deps do heavy lifting) |
-| 2 | **comprs** | **54** | **Excellent (self-contained)** |
+| 2 | **comprs** | **46** | **Excellent (self-contained)** |
 | 3 | flate2-rs | 111 | Good |
 | 4 | image | 116 | Good |
 | 5 | jpeg-encoder | 145 | Moderate |
@@ -607,7 +608,7 @@ compiled to WebAssembly via Emscripten.
 | Dimension | comprs | Best Alternative | Verdict |
 |-----------|--------|------------------|---------|
 | Test code ratio | 35.3% (5,766 LOC) | miniz_oxide (42.3%) | **Excellent** |
-| Actual code coverage | 76% (3,544/4,647 lines) | - | **Excellent** |
+| Actual code coverage | 78% (3,625/4,639 lines) | - | **Excellent** |
 | Zero dependencies | Yes | jpeg-encoder (JPEG only) | **Unique for PNG+JPEG** |
 | Codebase size | 8,674 LOC | jpeg-encoder (2,846) | Compact for scope |
 | Compression quality | 4-5% vs mozjpeg | mozjpeg | Good tradeoff |
@@ -635,7 +636,7 @@ The tradeoff is:
 | Maximum compression | ❌ Use mozjpeg/oxipng |
 | Node.js server | ❌ Use sharp (faster native) |
 | Minimal codebase to audit | ✅ comprs (8.7K LOC) |
-| High test coverage required | ✅ comprs (35% test ratio, 76% line coverage) |
+| High test coverage required | ✅ comprs (35% test ratio, 78% line coverage) |
 
 ### Final Verdict
 
@@ -666,33 +667,43 @@ The 4-5% compression gap is the cost of maintaining ~8.7K LOC instead of ~68K+ L
 
 | Location | LOC | Tests |
 |----------|-----|-------|
-| src/ (colocated) | 2,531 | 162 |
-| tests/ | 3,235 | 80 |
+| src/ (colocated) | 2,900 | 225 |
+| src/bin/ (CLI) | ~400 | 27 |
+| tests/ | 3,400 | 83 |
 | benches/ | 1,928 | - |
 | web/e2e/ (Playwright) | ~400 | 22 |
-| **Total** | **~6,166** | **264** |
+| **Total** | **~7,100** | **357** |
+
+Note: Test counts include doctests, property-based tests, and CLI unit tests.
 
 ### Actual Code Coverage
 
 Measured with `cargo tarpaulin`:
 
 ```
-76.26% coverage, 3544/4647 lines covered
+78.14% coverage, 3625/4639 lines covered
 ```
 
 | Component | Lines Covered | Total Lines | Coverage |
 |-----------|---------------|-------------|----------|
 | DEFLATE (deflate.rs) | 707 | 845 | 83.7% |
 | PNG (mod.rs) | 639 | 734 | 87.1% |
-| JPEG (mod.rs) | 530 | 627 | 84.5% |
-| LZ77 (lz77.rs) | 281 | 335 | 83.9% |
-| Huffman | 113 | 115 | 98.3% |
+| JPEG (mod.rs) | 520 | 627 | 82.9% |
+| LZ77 (lz77.rs) | 292 | 335 | 87.2% |
+| Huffman (compress) | 115 | 115 | 100.0% |
 | JPEG Huffman | 182 | 188 | 96.8% |
 | PNG filters | 201 | 228 | 88.2% |
+| PNG bit_depth | 57 | 58 | 98.3% |
+| CRC32 | 43 | 43 | 100.0% |
+| Adler32 | 12 | 13 | 92.3% |
+| Bit writers | 124 | 127 | 97.6% |
+| Color module | 34 | 35 | 97.1% |
+| Error types | 17 | 23 | 73.9% |
 | SIMD x86_64 | 160 | 475 | 33.7%* |
-| SIMD fallback | 58 | 66 | 87.9% |
+| SIMD fallback | 64 | 66 | 97.0% |
+| SIMD aarch64 | 0 | 35 | 0.0%* |
 
-\* SIMD code has lower coverage because tests run on specific architectures
+\* SIMD code has lower coverage because tests run on specific architectures. ARM NEON code cannot be tested on x86_64 and vice versa.
 
 **Command to regenerate:**
 ```bash
