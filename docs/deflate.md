@@ -492,5 +492,6 @@ Continue to [PNG Encoding](./png-encoding.md) to see how PNG uses DEFLATE along 
 ## References
 
 - [RFC 1951 - DEFLATE Compressed Data Format Specification](https://www.rfc-editor.org/rfc/rfc1951)
+- [RFC 1950 - zlib Compressed Data Format Specification](https://www.rfc-editor.org/rfc/rfc1950)
 - Deutsch, P. (1996). "DEFLATE Compressed Data Format Specification version 1.3"
 - See implementation: `src/compress/deflate.rs`

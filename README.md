@@ -9,7 +9,7 @@ This is a work-in-progress and exploration of coding agents.
 - **Zero runtime dependencies** — All encoding algorithms implemented from scratch
 - **Entirely in Rust** — No C or C++ codecs required
 - **PNG and JPEG support** — Lossless PNG, lossy PNG (quantization), and lossy JPEG
-- **Small WASM binary** — ~135 KB with competitive compression ([benchmarks](./benches/BENCHMARKS.md))
+- **Small WASM binary** — 142 KB with competitive compression ([benchmarks](./benches/BENCHMARKS.md))
 
 ## Usage
 
@@ -37,10 +37,3 @@ Comprehensive guides explaining the algorithms and compression strategies:
 - [JPEG Encoding](./docs/jpeg-encoding.md) — Lossy compression pipeline
 - [Discrete Cosine Transform](./docs/dct.md) — The mathematical heart of JPEG
 - [Quantization](./docs/quantization.md) — How JPEG achieves compression
-
-## References
-
-- [PNG Specification (RFC 2083)](https://www.w3.org/TR/PNG/)
-- [DEFLATE Specification (RFC 1951)](https://www.rfc-editor.org/rfc/rfc1951)
-- [zlib Specification (RFC 1950)](https://www.rfc-editor.org/rfc/rfc1950)
-- [JPEG Standard (ITU-T T.81)](https://www.w3.org/Graphics/JPEG/itu-t81.pdf)
