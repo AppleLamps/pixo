@@ -1,5 +1,9 @@
 # comprs
 
+[![crates.io](https://img.shields.io/crates/v/comprs.svg)](https://crates.io/crates/comprs)
+[![docs.rs](https://docs.rs/comprs/badge.svg)](https://docs.rs/comprs)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+
 A minimal-dependency, high-performance image compression library written in Rust.
 
 This is a work-in-progress and exploration of coding agents.
