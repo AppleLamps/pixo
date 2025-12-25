@@ -120,18 +120,26 @@ pub unsafe fn crc32_pclmulqdq(data: &[u8]) -> u32 {
 }
 
 /// Fold 16 bytes into the accumulator using PCLMULQDQ.
+///
+/// Computes: (acc.low * K1) XOR (acc.high * K2) XOR data
+/// where K1 = k[63:0] and K2 = k[127:64]
 #[inline]
 #[target_feature(enable = "pclmulqdq")]
 unsafe fn fold_16(acc: __m128i, data: __m128i, k: __m128i) -> __m128i {
-    // Multiply low 64 bits by k[0]
+    // Multiply low 64 bits of acc by low 64 bits of k (K1)
     let lo = _mm_clmulepi64_si128(acc, k, 0x00);
-    // Multiply high 64 bits by k[1]
+    // Multiply high 64 bits of acc by high 64 bits of k (K2)
     let hi = _mm_clmulepi64_si128(acc, k, 0x11);
     // XOR together with new data
     _mm_xor_si128(_mm_xor_si128(lo, hi), data)
 }
 
 /// Reduce 128-bit value to 32-bit CRC using Barrett reduction.
+///
+/// This follows the algorithm from Intel's "Fast CRC Computation Using PCLMULQDQ":
+/// 1. Fold 128 -> 64 bits using x.high * K5
+/// 2. Fold 64 -> 32 bits using result.low * K6
+/// 3. Barrett reduction to get final 32-bit CRC
 #[inline]
 #[target_feature(enable = "pclmulqdq", enable = "sse4.1")]
 unsafe fn reduce_128_to_32(x: __m128i) -> u32 {
@@ -145,23 +153,28 @@ unsafe fn reduce_128_to_32(x: __m128i) -> u32 {
     );
     let mask32 = _mm_set_epi32(0, 0, 0, -1);
 
-    // Fold 128 -> 64 bits: x.high XOR (x.low * K6)
-    let t0 = _mm_clmulepi64_si128(x, k5k6, 0x10); // x.low * K6 (high of k5k6)
-    let x_high = _mm_srli_si128(x, 8);
-    let folded = _mm_xor_si128(x_high, t0);
+    // Step 1: Fold 128 -> 64 bits
+    // Multiply x.high by K5, XOR with x
+    let t0 = _mm_clmulepi64_si128(x, k5k6, 0x01); // x[127:64] * k5k6[63:0] = x.high * K5
+    let crc = _mm_xor_si128(t0, x);
+    // Now crc[63:0] contains the 64-bit intermediate
 
-    // Fold 64 -> 32 bits: folded.low32 XOR (folded.high32 * K5)
-    let folded_high32 = _mm_srli_si128(folded, 4); // shift right 4 bytes to get high 32 bits
-    let t1 = _mm_clmulepi64_si128(folded_high32, k5k6, 0x00); // high32 * K5 (low of k5k6)
-    let folded_low32 = _mm_and_si128(folded, mask32);
-    let folded32 = _mm_xor_si128(folded_low32, t1);
+    // Step 2: Fold 64 -> 32 bits
+    // Multiply crc.low by K6, XOR low 32 bits of result with high 32 bits of crc
+    let t1 = _mm_clmulepi64_si128(_mm_and_si128(crc, mask32), k5k6, 0x10); // crc[31:0] * K6
+    let crc = _mm_xor_si128(_mm_srli_si128(crc, 4), t1); // crc[63:32] XOR t1
+    // Now the 32-bit value to reduce is at crc[31:0], with extra bits in [63:32]
 
-    // Barrett reduction
-    let t2 = _mm_clmulepi64_si128(_mm_and_si128(folded32, mask32), poly_mu, 0x00); // * mu
-    let t3 = _mm_clmulepi64_si128(_mm_and_si128(t2, mask32), poly_mu, 0x10); // * poly
-    let result = _mm_xor_si128(folded32, t3);
+    // Step 3: Barrett reduction
+    // T1 = floor(crc[31:0] / x^32) * mu = crc[31:0] * mu, take high part
+    let t2 = _mm_clmulepi64_si128(_mm_and_si128(crc, mask32), poly_mu, 0x00); // crc[31:0] * mu
+    // T2 = floor(T1 / x^32) * P = T1[63:32] * P
+    let t2_high = _mm_srli_si128(t2, 4);
+    let t3 = _mm_clmulepi64_si128(_mm_and_si128(t2_high, mask32), poly_mu, 0x10); // t2[63:32] * poly
+    // CRC = (crc XOR T2)[31:0]
+    let result = _mm_xor_si128(crc, t3);
 
-    _mm_extract_epi32(result, 1) as u32
+    _mm_extract_epi32(result, 0) as u32
 }
 
 /// CRC32 table lookup for a single byte.
