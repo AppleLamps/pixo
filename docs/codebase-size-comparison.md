@@ -2,7 +2,7 @@
 
 **Generated:** December 2025
 
-This document provides a comprehensive comparison of codebase sizes between `comprs` and other image compression libraries referenced in the benchmarks, including Rust, C/C++, and JavaScript/Node.js ecosystems.
+This document provides a comprehensive comparison of codebase sizes between `pixo` and other image compression libraries referenced in the benchmarks, including Rust, C/C++, and JavaScript/Node.js ecosystems.
 
 ## Table of Contents
 
@@ -28,7 +28,7 @@ This document provides a comprehensive comparison of codebase sizes between `com
 
 | Library | Total LOC | Core Code | Test Code | Test % | Dependencies | Formats |
 |---------|-----------|-----------|-----------|--------|--------------|---------|
-| **comprs** | 18,788 | 7,893 | 8,967 | **47.7%** (79.2% line coverage) | 0 (zero deps) | PNG, JPEG |
+| **pixo** | 18,788 | 7,893 | 8,967 | **47.7%** (79.2% line coverage) | 0 (zero deps) | PNG, JPEG |
 | jpeg-encoder | 3,642 | 2,846 | 796 | 21.9% | 0 | JPEG only |
 | miniz_oxide | 7,805 | 4,501 | 3,304 | 42.3% | 0 | DEFLATE only |
 | zopfli | 3,449 | 3,337 | 112 | 3.2% | 0 | DEFLATE only |
@@ -56,11 +56,11 @@ This document provides a comprehensive comparison of codebase sizes between `com
 
 ### Key Findings
 
-1. **comprs has the highest test ratio (47.7%) among zero-dependency multi-format libraries, with 79.2% actual code coverage**
-2. **comprs is ~13× smaller than mozjpeg** while providing comparable JPEG encoding
-3. **The compression gap comes from SIMD**: mozjpeg has 50K+ lines of hand-tuned assembly; comprs has 1.6K lines of Rust SIMD
+1. **pixo has the highest test ratio (47.7%) among zero-dependency multi-format libraries, with 79.2% actual code coverage**
+2. **pixo is ~13× smaller than mozjpeg** while providing comparable JPEG encoding
+3. **The compression gap comes from SIMD**: mozjpeg has 50K+ lines of hand-tuned assembly; pixo has 1.6K lines of Rust SIMD
 4. **sharp appears small (10K) but depends on libvips (194K LOC)**
-5. **For equivalent PNG+JPEG functionality, comprs is the most compact zero-dep option**
+5. **For equivalent PNG+JPEG functionality, pixo is the most compact zero-dep option**
 
 ---
 
@@ -158,7 +158,7 @@ echo "$((total_loc / test_count)) LOC per test"
 
 | Library | GitHub URL | Description |
 |---------|-----------|-------------|
-| comprs | (this repo) | Zero-dependency image compression |
+| pixo | (this repo) | Zero-dependency image compression |
 | image | https://github.com/image-rs/image | Multi-format image processing |
 | image-png | https://github.com/image-rs/image-png | PNG codec for image crate |
 | jpeg-encoder | https://github.com/vstroebel/jpeg-encoder | Pure Rust JPEG encoder |
@@ -195,7 +195,7 @@ Different libraries support different image formats, which affects their codebas
 
 | Library | PNG | JPEG | GIF | WebP | AVIF | TIFF | BMP | Other | Total Formats |
 |---------|-----|------|-----|------|------|------|-----|-------|---------------|
-| **comprs** | ✓ | ✓ | - | - | - | - | - | - | **2** |
+| **pixo** | ✓ | ✓ | - | - | - | - | - | - | **2** |
 | jpeg-encoder | - | ✓ | - | - | - | - | - | - | 1 |
 | image-png | ✓ | - | - | - | - | - | - | - | 1 |
 | image | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ICO, PNM, HDR, etc. | 12+ |
@@ -209,20 +209,20 @@ When comparing libraries that support PNG+JPEG:
 
 | Library | Core LOC | Formats | LOC per Format |
 |---------|----------|---------|----------------|
-| **comprs** | 7,893 | 2 | **3,947** |
+| **pixo** | 7,893 | 2 | **3,947** |
 | image | 21,571 | 12+ | ~1,800 |
 | sharp (excl libvips) | 4,196 | 10+ | ~420 |
 
-**Note**: `image` and `sharp` have lower LOC-per-format because they delegate to specialized codecs. `comprs` implements everything from scratch.
+**Note**: `image` and `sharp` have lower LOC-per-format because they delegate to specialized codecs. `pixo` implements everything from scratch.
 
 ---
 
 ## Detailed Analysis
 
-### comprs (This Project)
+### pixo (This Project)
 
 ```
-=== COMPRS ===
+=== PIXO ===
 Rust files: 41
 Total Rust code: 18,788 LOC
 
@@ -309,7 +309,7 @@ Each WASM codec is 200KB-800KB
 
 | Library | Language | Core LOC | SIMD LOC | Total | Compression Quality |
 |---------|----------|----------|----------|-------|---------------------|
-| **comprs** | Rust | 2,989 | 500* | 3,489 | Good (4-5% vs mozjpeg) |
+| **pixo** | Rust | 2,989 | 500* | 3,489 | Good (4-5% vs mozjpeg) |
 | jpeg-encoder | Rust | 3,240 | 800* | 4,040 | Good |
 | mozjpeg | C/ASM | 17,506 | 50,623 | 68,129 | Best (reference) |
 
@@ -319,7 +319,7 @@ Each WASM codec is 200KB-800KB
 
 | Library | Language | PNG LOC | DEFLATE LOC | Total | Notes |
 |---------|----------|---------|-------------|-------|-------|
-| **comprs** | Rust | 2,691 | 2,910 | 5,601 | All-in-one |
+| **pixo** | Rust | 2,691 | 2,910 | 5,601 | All-in-one |
 | image-png | Rust | 8,890 | - | 8,890 | Uses miniz_oxide |
 | + miniz_oxide | Rust | - | 4,838 | 4,838 | DEFLATE dep |
 | **Total** | | | | **13,728** | |
@@ -328,19 +328,19 @@ Each WASM codec is 200KB-800KB
 | + libdeflate | C | - | 6,704 | 6,704 | C dep |
 | **Total** | | | | **11,238** | |
 
-**comprs is 2.5× smaller than image-png+miniz_oxide and 2× smaller than oxipng+libdeflate**
+**pixo is 2.5× smaller than image-png+miniz_oxide and 2× smaller than oxipng+libdeflate**
 
 ---
 
 ## SIMD and Low-Level Optimization Analysis
 
-The 4-5% compression gap between comprs and mozjpeg is explained by SIMD investment:
+The 4-5% compression gap between pixo and mozjpeg is explained by SIMD investment:
 
 ### SIMD Code Size Comparison
 
 | Library | SIMD Code | % of Total | Architectures |
 |---------|-----------|------------|---------------|
-| **comprs** | 1,594 LOC | 20.2% | ARM64 NEON, x86 AVX2/SSE |
+| **pixo** | 1,594 LOC | 20.2% | ARM64 NEON, x86 AVX2/SSE |
 | jpeg-encoder | ~3,230 LOC | 77% | AVX2 |
 | mozjpeg | 50,623 LOC | 45% | SSE2, AVX2, NEON, MIPS, PowerPC |
 | libdeflate | 2,371 LOC | 16% | SSE2, AVX2, NEON |
@@ -367,10 +367,10 @@ for different CPU features, painstakingly optimized
 over 30+ years.
 ```
 
-### comprs SIMD (Modern Rust Approach)
+### pixo SIMD (Modern Rust Approach)
 
 ```rust
-// comprs uses portable SIMD with architecture detection
+// pixo uses portable SIMD with architecture detection
 #[cfg(target_arch = "x86_64")]
 mod x86_64 {
     // Uses core::arch intrinsics
@@ -385,7 +385,7 @@ mod aarch64 {
 }
 ```
 
-**The tradeoff**: comprs sacrifices ~4-5% compression for ~40× less SIMD code.
+**The tradeoff**: pixo sacrifices ~4-5% compression for ~40× less SIMD code.
 
 ---
 
@@ -393,11 +393,11 @@ mod aarch64 {
 
 ### The Question
 
-> Did comprs end up with more lines of code due to AI generation? Is it missing the many years of low-level codec optimizations?
+> Did pixo end up with more lines of code due to AI generation? Is it missing the many years of low-level codec optimizations?
 
 ### The Analysis
 
-| Metric | comprs | mozjpeg | Ratio |
+| Metric | pixo | mozjpeg | Ratio |
 |--------|--------|---------|-------|
 | Total LOC | 18,788 | 111,966 | 1:6 |
 | Core codec | 7,893 | 68,129 | 1:9 |
@@ -407,7 +407,7 @@ mod aarch64 {
 
 \* mozjpeg test code is minimal
 
-### What comprs Does Well (AI-Assisted Benefits)
+### What pixo Does Well (AI-Assisted Benefits)
 
 1. **Higher test coverage** (47.7% vs ~5%): AI-generated code tends to come with tests
 2. **Modern Rust idioms**: Memory safety, no undefined behavior
@@ -415,7 +415,7 @@ mod aarch64 {
 4. **Clean architecture**: No 30-year legacy baggage
 5. **WASM-native**: No Emscripten required
 
-### What comprs Trades Away
+### What pixo Trades Away
 
 1. **Hand-tuned assembly**: 38× less SIMD code
 2. **Edge case optimizations**: Decades of micro-optimizations
@@ -426,8 +426,8 @@ mod aarch64 {
 
 | Library | LOC/Test | Interpretation |
 |---------|----------|----------------|
+| **pixo** | **37** | **Excellent test coverage** |
 | oxipng | 33 | Very well-tested (uses C deps) |
-| **comprs** | **37** | **Excellent test coverage** |
 | image | 116 | Less tested |
 | jpeg-encoder | 145 | Moderately tested |
 | mozjpeg | ~2,000+ | Minimally tested |
@@ -439,13 +439,13 @@ mod aarch64 {
 |---------|-----------|----------------|
 | image-png | 25.6% | Heavily documented |
 | mozjpeg | 25.2% | Heavily documented (legacy) |
-| **comprs** | **17.9%** | Well documented |
+| **pixo** | **17.9%** | Well documented |
 | jpeg-encoder | 17.6% | Well documented |
 | miniz_oxide | 14.2% | Adequately documented |
 
 ### Verdict
 
-**comprs is NOT bloated from AI generation.** In fact, it's remarkably compact:
+**pixo is NOT bloated from AI generation.** In fact, it's remarkably compact:
 
 - **7.9K core LOC** implements PNG + JPEG + DEFLATE + SIMD
 - **47.7% test coverage** is exceptional for codec libraries
@@ -495,9 +495,9 @@ Each WASM codec contains its full C/C++ codebase
 compiled to WebAssembly via Emscripten.
 ```
 
-### Comparison with comprs
+### Comparison with pixo
 
-| Metric | comprs | sharp | squoosh |
+| Metric | pixo | sharp | squoosh |
 |--------|--------|-------|---------|
 | Bundle size (WASM) | **146 KB** | N/A (native) | ~2.1 MB |
 | Dependencies | 0 | libvips (194K LOC) | mozjpeg, oxipng, etc. |
@@ -515,7 +515,7 @@ compiled to WebAssembly via Emscripten.
 │                          DEPENDENCY TREE COMPARISON                              │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                  │
-│  comprs (Zero Dependencies) ─────────────────────────────────────────────────── │
+│  pixo (Zero Dependencies) ─────────────────────────────────────────────────── │
 │  └── Total: 7,893 LOC                                                           │
 │                                                                                  │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -546,7 +546,7 @@ compiled to WebAssembly via Emscripten.
 
 | Solution | Own Code | Dependencies | Total Effective |
 |----------|----------|--------------|-----------------|
-| **comprs** | 7,893 | 0 | **7,893** |
+| **pixo** | 7,893 | 0 | **7,893** |
 | image-png + jpeg-encoder | 9,572 | 4,838 (miniz_oxide) | 14,410 |
 | oxipng + jpeg-encoder | 7,380 | 6,704 (libdeflate) | 14,084 |
 | sharp | 10,127 | 194,229 (libvips) | 204,356 |
@@ -559,7 +559,7 @@ compiled to WebAssembly via Emscripten.
 
 | Rank | Library | Test % | Tests | Notes |
 |------|---------|--------|-------|-------|
-| 1 | **comprs** | **47.7%** | **507** | **PNG + JPEG, zero deps** |
+| 1 | **pixo** | **47.7%** | **507** | **PNG + JPEG, zero deps** |
 | 2 | miniz_oxide | 42.3% | 61 | DEFLATE only |
 | 3 | image-png | 34.3% | 90 | PNG only |
 | 4 | flate2-rs | 28.3% | 62 | Wrapper |
@@ -572,7 +572,7 @@ compiled to WebAssembly via Emscripten.
 | Rank | Library | LOC/Test | Interpretation |
 |------|---------|----------|----------------|
 | 1 | oxipng | 33 | Excellent (C deps do heavy lifting) |
-| 2 | **comprs** | **37** | **Excellent (self-contained)** |
+| 2 | **pixo** | **37** | **Excellent (self-contained)** |
 | 3 | flate2-rs | 111 | Good |
 | 4 | image | 116 | Good |
 | 5 | jpeg-encoder | 145 | Moderate |
@@ -583,7 +583,7 @@ compiled to WebAssembly via Emscripten.
 
 | Rank | Solution | Total LOC | Zero Deps? |
 |------|----------|-----------|------------|
-| 1 | **comprs** | **7,893** | **Yes** |
+| 1 | **pixo** | **7,893** | **Yes** |
 | 2 | jpeg-encoder (JPEG only) | 2,846 | Yes |
 | 3 | oxipng + libdeflate (PNG only) | 11,238 | No (C) |
 | 4 | image-png + miniz_oxide (PNG only) | 13,728 | Yes |
@@ -594,7 +594,7 @@ compiled to WebAssembly via Emscripten.
 
 | Library | Core LOC | Features | LOC per Feature |
 |---------|----------|----------|-----------------|
-| **comprs** | 7,893 | PNG, JPEG, DEFLATE, SIMD, WASM | **1,579** |
+| **pixo** | 7,893 | PNG, JPEG, DEFLATE, SIMD, WASM | **1,579** |
 | jpeg-encoder | 2,846 | JPEG, SIMD | 1,423 |
 | oxipng | 4,534 | PNG optimization | 4,534 |
 | mozjpeg | 68,129 | JPEG (advanced) | 68,129 |
@@ -603,9 +603,9 @@ compiled to WebAssembly via Emscripten.
 
 ## Conclusions
 
-### How comprs Stacks Up
+### How pixo Stacks Up
 
-| Dimension | comprs | Best Alternative | Verdict |
+| Dimension | pixo | Best Alternative | Verdict |
 |-----------|--------|------------------|---------|
 | Test code ratio | 47.7% (8,967 LOC) | miniz_oxide (42.3%) | **Best in class** |
 | Actual code coverage | 79.2% (3,675/4,642 lines) | - | **Excellent** |
@@ -617,7 +617,7 @@ compiled to WebAssembly via Emscripten.
 
 ### The AI-Assisted Advantage
 
-comprs demonstrates that AI-assisted development can produce:
+pixo demonstrates that AI-assisted development can produce:
 1. **Higher test coverage** than hand-written legacy code
 2. **Compact implementations** (not bloated)
 3. **Modern safety guarantees** (Rust's memory safety)
@@ -627,20 +627,20 @@ The tradeoff is:
 1. **Less raw optimization** (1.6K vs 50K SIMD lines)
 2. **Slightly larger output** (4-5% vs mozjpeg)
 
-### When to Choose comprs
+### When to Choose pixo
 
 | Use Case | Recommendation |
 |----------|----------------|
-| Web application (WASM) | ✅ comprs (146 KB binary) |
-| Zero native dependencies | ✅ comprs (cargo add only) |
+| Web application (WASM) | ✅ pixo (146 KB binary) |
+| Zero native dependencies | ✅ pixo (cargo add only) |
 | Maximum compression | ❌ Use mozjpeg/oxipng |
 | Node.js server | ❌ Use sharp (faster native) |
-| Minimal codebase to audit | ✅ comprs (7.9K LOC) |
-| High test coverage required | ✅ comprs (47.7% test ratio, 79.2% line coverage) |
+| Minimal codebase to audit | ✅ pixo (7.9K LOC) |
+| High test coverage required | ✅ pixo (47.7% test ratio, 79.2% line coverage) |
 
 ### Final Verdict
 
-**comprs is a well-engineered, compact, well-tested image compression library that trades 30+ years of hand-tuned assembly optimization for modern Rust safety, WASM compatibility, and developer experience.**
+**pixo is a well-engineered, compact, well-tested image compression library that trades 30+ years of hand-tuned assembly optimization for modern Rust safety, WASM compatibility, and developer experience.**
 
 The 4-5% compression gap is the cost of maintaining ~7.9K LOC instead of ~68K+ LOC. For most web applications, this is an excellent tradeoff.
 
@@ -648,7 +648,7 @@ The 4-5% compression gap is the cost of maintaining ~7.9K LOC instead of ~68K+ L
 
 ## Appendix: Raw Data
 
-### comprs Component Breakdown
+### pixo Component Breakdown
 
 | Component | File | LOC |
 |-----------|------|-----|
