@@ -26,33 +26,33 @@ This document provides a comprehensive comparison of codebase sizes between `pix
 
 ### Rust Libraries
 
-| Library | Total LOC | Core Code | Test Code | Test % | Dependencies | Formats |
-|---------|-----------|-----------|-----------|--------|--------------|---------|
-| **pixo** | 18,788 | 7,893 | 8,967 | **47.7%** (79.2% line coverage) | 0 (zero deps) | PNG, JPEG |
-| jpeg-encoder | 3,642 | 2,846 | 796 | 21.9% | 0 | JPEG only |
-| miniz_oxide | 7,805 | 4,501 | 3,304 | 42.3% | 0 | DEFLATE only |
-| zopfli | 3,449 | 3,337 | 112 | 3.2% | 0 | DEFLATE only |
-| image-png | 10,246 | 6,726 | 3,520 | 34.3% | miniz_oxide | PNG only |
-| image | 27,563 | 21,571 | 5,992 | 21.7% | 15+ crates | 12+ formats |
-| oxipng | 9,209 | 4,534 | 4,675 | 50.8% | libdeflate (C) | PNG only |
+| Library      | Total LOC | Core Code | Test Code | Test %                          | Dependencies   | Formats      |
+| ------------ | --------- | --------- | --------- | ------------------------------- | -------------- | ------------ |
+| **pixo**     | 18,788    | 7,893     | 8,967     | **47.7%** (79.2% line coverage) | 0 (zero deps)  | PNG, JPEG    |
+| jpeg-encoder | 3,642     | 2,846     | 796       | 21.9%                           | 0              | JPEG only    |
+| miniz_oxide  | 7,805     | 4,501     | 3,304     | 42.3%                           | 0              | DEFLATE only |
+| zopfli       | 3,449     | 3,337     | 112       | 3.2%                            | 0              | DEFLATE only |
+| image-png    | 10,246    | 6,726     | 3,520     | 34.3%                           | miniz_oxide    | PNG only     |
+| image        | 27,563    | 21,571    | 5,992     | 21.7%                           | 15+ crates     | 12+ formats  |
+| oxipng       | 9,209     | 4,534     | 4,675     | 50.8%                           | libdeflate (C) | PNG only     |
 
 ### C/C++ Libraries (Industry Standard)
 
-| Library | Total LOC | Language | Age | SIMD LOC | Notes |
-|---------|-----------|----------|-----|----------|-------|
-| mozjpeg | 111,966 | C/ASM | 30+ years | 50,623 | Industry gold standard |
-| libdeflate | 14,429 | C | 8+ years | 2,371 | Fastest DEFLATE |
-| lodepng | 11,927 | C++ | 15+ years | 0 | Single-file PNG |
-| libvips | 194,229 | C | 20+ years | N/A | Full image processing |
-| libimagequant | 5,850 | C/Rust | 10+ years | N/A | Color quantization |
-| pngquant | 1,912 | C/Rust | 15+ years | N/A | PNG optimizer |
+| Library       | Total LOC | Language | Age       | SIMD LOC | Notes                  |
+| ------------- | --------- | -------- | --------- | -------- | ---------------------- |
+| mozjpeg       | 111,966   | C/ASM    | 30+ years | 50,623   | Industry gold standard |
+| libdeflate    | 14,429    | C        | 8+ years  | 2,371    | Fastest DEFLATE        |
+| lodepng       | 11,927    | C++      | 15+ years | 0        | Single-file PNG        |
+| libvips       | 194,229   | C        | 20+ years | N/A      | Full image processing  |
+| libimagequant | 5,850     | C/Rust   | 10+ years | N/A      | Color quantization     |
+| pngquant      | 1,912     | C/Rust   | 15+ years | N/A      | PNG optimizer          |
 
 ### JavaScript/Node.js Libraries
 
-| Library | Total LOC | Native Deps | Notes |
-|---------|-----------|-------------|-------|
-| sharp | 10,127 | libvips (194K) | Node.js image processing |
-| squoosh | 31,662 | WASM codecs | Google's web codecs |
+| Library | Total LOC | Native Deps    | Notes                    |
+| ------- | --------- | -------------- | ------------------------ |
+| sharp   | 10,127    | libvips (194K) | Node.js image processing |
+| squoosh | 31,662    | WASM codecs    | Google's web codecs      |
 
 ### Key Findings
 
@@ -67,6 +67,7 @@ This document provides a comprehensive comparison of codebase sizes between `pix
 ## Methodology
 
 ### Tools Used
+
 - **cloc** (Count Lines of Code) v1.98 - Primary line counting
 - **rg** (ripgrep) - Pattern matching for test detection
 - **Perl** - Custom scripts for colocated test extraction
@@ -85,9 +86,9 @@ This document provides a comprehensive comparison of codebase sizes between `pix
 rg -l "cfg\(test\)" src/
 
 # Estimate lines in test modules
-perl -ne 'BEGIN{$in_test=0} 
-  if (/#\[cfg\(test\)\]/) {$in_test=1} 
-  if ($in_test) {$count++} 
+perl -ne 'BEGIN{$in_test=0}
+  if (/#\[cfg\(test\)\]/) {$in_test=1}
+  if ($in_test) {$count++}
   END{print "$count\n"}' file.rs
 ```
 
@@ -156,36 +157,36 @@ echo "$((total_loc / test_count)) LOC per test"
 
 ### Rust Libraries
 
-| Library | GitHub URL | Description |
-|---------|-----------|-------------|
-| pixo | (this repo) | Zero-dependency image compression |
-| image | https://github.com/image-rs/image | Multi-format image processing |
-| image-png | https://github.com/image-rs/image-png | PNG codec for image crate |
-| jpeg-encoder | https://github.com/vstroebel/jpeg-encoder | Pure Rust JPEG encoder |
-| oxipng | https://github.com/shssoichiro/oxipng | PNG optimizer (CLI/lib) |
-| zopfli | https://github.com/zopfli-rs/zopfli | Pure Rust Zopfli port |
-| flate2-rs | https://github.com/rust-lang/flate2-rs | DEFLATE wrapper |
-| miniz_oxide | https://github.com/Frommi/miniz_oxide | Pure Rust DEFLATE |
-| lodepng-rust | https://github.com/kornelski/lodepng-rust | Rust bindings for lodepng |
-| libimagequant | https://github.com/ImageOptim/libimagequant | Color quantization |
-| libdeflater | https://github.com/libdeflater/libdeflater | Rust bindings for libdeflate |
+| Library       | GitHub URL                                  | Description                       |
+| ------------- | ------------------------------------------- | --------------------------------- |
+| pixo          | (this repo)                                 | Zero-dependency image compression |
+| image         | https://github.com/image-rs/image           | Multi-format image processing     |
+| image-png     | https://github.com/image-rs/image-png       | PNG codec for image crate         |
+| jpeg-encoder  | https://github.com/vstroebel/jpeg-encoder   | Pure Rust JPEG encoder            |
+| oxipng        | https://github.com/shssoichiro/oxipng       | PNG optimizer (CLI/lib)           |
+| zopfli        | https://github.com/zopfli-rs/zopfli         | Pure Rust Zopfli port             |
+| flate2-rs     | https://github.com/rust-lang/flate2-rs      | DEFLATE wrapper                   |
+| miniz_oxide   | https://github.com/Frommi/miniz_oxide       | Pure Rust DEFLATE                 |
+| lodepng-rust  | https://github.com/kornelski/lodepng-rust   | Rust bindings for lodepng         |
+| libimagequant | https://github.com/ImageOptim/libimagequant | Color quantization                |
+| libdeflater   | https://github.com/libdeflater/libdeflater  | Rust bindings for libdeflate      |
 
 ### C/C++ Libraries
 
-| Library | GitHub URL | Description |
-|---------|-----------|-------------|
-| mozjpeg | https://github.com/mozilla/mozjpeg | Mozilla's optimized JPEG encoder |
-| libdeflate | https://github.com/ebiggers/libdeflate | Fast DEFLATE compression |
-| lodepng | https://github.com/lvandeve/lodepng | Single-file PNG encoder/decoder |
-| pngquant | https://github.com/kornelski/pngquant | Lossy PNG optimizer |
-| libvips | https://github.com/libvips/libvips | Full image processing library |
+| Library    | GitHub URL                             | Description                      |
+| ---------- | -------------------------------------- | -------------------------------- |
+| mozjpeg    | https://github.com/mozilla/mozjpeg     | Mozilla's optimized JPEG encoder |
+| libdeflate | https://github.com/ebiggers/libdeflate | Fast DEFLATE compression         |
+| lodepng    | https://github.com/lvandeve/lodepng    | Single-file PNG encoder/decoder  |
+| pngquant   | https://github.com/kornelski/pngquant  | Lossy PNG optimizer              |
+| libvips    | https://github.com/libvips/libvips     | Full image processing library    |
 
 ### JavaScript/Node.js Libraries
 
-| Library | GitHub URL | Description |
-|---------|-----------|-------------|
-| sharp | https://github.com/lovell/sharp | High-performance Node.js image processing |
-| squoosh | https://github.com/GoogleChromeLabs/squoosh | Google's browser image codecs |
+| Library | GitHub URL                                  | Description                               |
+| ------- | ------------------------------------------- | ----------------------------------------- |
+| sharp   | https://github.com/lovell/sharp             | High-performance Node.js image processing |
+| squoosh | https://github.com/GoogleChromeLabs/squoosh | Google's browser image codecs             |
 
 ---
 
@@ -193,25 +194,25 @@ echo "$((total_loc / test_count)) LOC per test"
 
 Different libraries support different image formats, which affects their codebase size:
 
-| Library | PNG | JPEG | GIF | WebP | AVIF | TIFF | BMP | Other | Total Formats |
-|---------|-----|------|-----|------|------|------|-----|-------|---------------|
-| **pixo** | ✓ | ✓ | - | - | - | - | - | - | **2** |
-| jpeg-encoder | - | ✓ | - | - | - | - | - | - | 1 |
-| image-png | ✓ | - | - | - | - | - | - | - | 1 |
-| image | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ICO, PNM, HDR, etc. | 12+ |
-| oxipng | ✓ | - | - | - | - | - | - | - | 1 |
-| sharp | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | - | HEIF, JXL, etc. | 10+ |
-| squoosh | ✓ | ✓ | - | ✓ | ✓ | - | - | QOI, JXL | 6 |
+| Library      | PNG | JPEG | GIF | WebP | AVIF | TIFF | BMP | Other               | Total Formats |
+| ------------ | --- | ---- | --- | ---- | ---- | ---- | --- | ------------------- | ------------- |
+| **pixo**     | ✓   | ✓    | -   | -    | -    | -    | -   | -                   | **2**         |
+| jpeg-encoder | -   | ✓    | -   | -    | -    | -    | -   | -                   | 1             |
+| image-png    | ✓   | -    | -   | -    | -    | -    | -   | -                   | 1             |
+| image        | ✓   | ✓    | ✓   | ✓    | ✓    | ✓    | ✓   | ICO, PNM, HDR, etc. | 12+           |
+| oxipng       | ✓   | -    | -   | -    | -    | -    | -   | -                   | 1             |
+| sharp        | ✓   | ✓    | ✓   | ✓    | ✓    | ✓    | -   | HEIF, JXL, etc.     | 10+           |
+| squoosh      | ✓   | ✓    | -   | ✓    | ✓    | -    | -   | QOI, JXL            | 6             |
 
 ### Format-Adjusted Size Comparison
 
 When comparing libraries that support PNG+JPEG:
 
-| Library | Core LOC | Formats | LOC per Format |
-|---------|----------|---------|----------------|
-| **pixo** | 7,893 | 2 | **3,947** |
-| image | 21,571 | 12+ | ~1,800 |
-| sharp (excl libvips) | 4,196 | 10+ | ~420 |
+| Library              | Core LOC | Formats | LOC per Format |
+| -------------------- | -------- | ------- | -------------- |
+| **pixo**             | 7,893    | 2       | **3,947**      |
+| image                | 21,571   | 12+     | ~1,800         |
+| sharp (excl libvips) | 4,196    | 10+     | ~420           |
 
 **Note**: `image` and `sharp` have lower LOC-per-format because they delegate to specialized codecs. `pixo` implements everything from scratch.
 
@@ -307,26 +308,26 @@ Each WASM codec is 200KB-800KB
 
 ### JPEG Encoding (Pure Codec Code Only)
 
-| Library | Language | Core LOC | SIMD LOC | Total | Compression Quality |
-|---------|----------|----------|----------|-------|---------------------|
-| **pixo** | Rust | 2,989 | 500* | 3,489 | Good (4-5% vs mozjpeg) |
-| jpeg-encoder | Rust | 3,240 | 800* | 4,040 | Good |
-| mozjpeg | C/ASM | 17,506 | 50,623 | 68,129 | Best (reference) |
+| Library      | Language | Core LOC | SIMD LOC | Total  | Compression Quality    |
+| ------------ | -------- | -------- | -------- | ------ | ---------------------- |
+| **pixo**     | Rust     | 2,989    | 500\*    | 3,489  | Good (4-5% vs mozjpeg) |
+| jpeg-encoder | Rust     | 3,240    | 800\*    | 4,040  | Good                   |
+| mozjpeg      | C/ASM    | 17,506   | 50,623   | 68,129 | Best (reference)       |
 
 \* Estimated SIMD lines shared with other codecs
 
 ### PNG Encoding (Pure Codec Code Only)
 
-| Library | Language | PNG LOC | DEFLATE LOC | Total | Notes |
-|---------|----------|---------|-------------|-------|-------|
-| **pixo** | Rust | 2,691 | 2,910 | 5,601 | All-in-one |
-| image-png | Rust | 8,890 | - | 8,890 | Uses miniz_oxide |
-| + miniz_oxide | Rust | - | 4,838 | 4,838 | DEFLATE dep |
-| **Total** | | | | **13,728** | |
-| lodepng | C++ | 5,932 | (included) | 5,932 | Single file |
-| oxipng | Rust | 4,534 | - | 4,534 | Uses libdeflate |
-| + libdeflate | C | - | 6,704 | 6,704 | C dep |
-| **Total** | | | | **11,238** | |
+| Library       | Language | PNG LOC | DEFLATE LOC | Total      | Notes            |
+| ------------- | -------- | ------- | ----------- | ---------- | ---------------- |
+| **pixo**      | Rust     | 2,691   | 2,910       | 5,601      | All-in-one       |
+| image-png     | Rust     | 8,890   | -           | 8,890      | Uses miniz_oxide |
+| + miniz_oxide | Rust     | -       | 4,838       | 4,838      | DEFLATE dep      |
+| **Total**     |          |         |             | **13,728** |                  |
+| lodepng       | C++      | 5,932   | (included)  | 5,932      | Single file      |
+| oxipng        | Rust     | 4,534   | -           | 4,534      | Uses libdeflate  |
+| + libdeflate  | C        | -       | 6,704       | 6,704      | C dep            |
+| **Total**     |          |         |             | **11,238** |                  |
 
 **pixo is 2.5× smaller than image-png+miniz_oxide and 2× smaller than oxipng+libdeflate**
 
@@ -338,12 +339,12 @@ The 4-5% compression gap between pixo and mozjpeg is explained by SIMD investmen
 
 ### SIMD Code Size Comparison
 
-| Library | SIMD Code | % of Total | Architectures |
-|---------|-----------|------------|---------------|
-| **pixo** | 1,594 LOC | 20.2% | ARM64 NEON, x86 AVX2/SSE |
-| jpeg-encoder | ~3,230 LOC | 77% | AVX2 |
-| mozjpeg | 50,623 LOC | 45% | SSE2, AVX2, NEON, MIPS, PowerPC |
-| libdeflate | 2,371 LOC | 16% | SSE2, AVX2, NEON |
+| Library      | SIMD Code  | % of Total | Architectures                   |
+| ------------ | ---------- | ---------- | ------------------------------- |
+| **pixo**     | 1,594 LOC  | 20.2%      | ARM64 NEON, x86 AVX2/SSE        |
+| jpeg-encoder | ~3,230 LOC | 77%        | AVX2                            |
+| mozjpeg      | 50,623 LOC | 45%        | SSE2, AVX2, NEON, MIPS, PowerPC |
+| libdeflate   | 2,371 LOC  | 16%        | SSE2, AVX2, NEON                |
 
 ### What mozjpeg's 50K SIMD Lines Buy
 
@@ -397,13 +398,13 @@ mod aarch64 {
 
 ### The Analysis
 
-| Metric | pixo | mozjpeg | Ratio |
-|--------|--------|---------|-------|
-| Total LOC | 18,788 | 111,966 | 1:6 |
-| Core codec | 7,893 | 68,129 | 1:9 |
-| SIMD | 1,594 | 50,623 | 1:32 |
-| Test % | 47.7% | ~5%* | 10:1 |
-| Age | 2024-2025 | 1991-present | - |
+| Metric     | pixo      | mozjpeg      | Ratio |
+| ---------- | --------- | ------------ | ----- |
+| Total LOC  | 18,788    | 111,966      | 1:6   |
+| Core codec | 7,893     | 68,129       | 1:9   |
+| SIMD       | 1,594     | 50,623       | 1:32  |
+| Test %     | 47.7%     | ~5%\*        | 10:1  |
+| Age        | 2024-2025 | 1991-present | -     |
 
 \* mozjpeg test code is minimal
 
@@ -424,24 +425,24 @@ mod aarch64 {
 
 ### Code Density Comparison (LOC per Test)
 
-| Library | LOC/Test | Interpretation |
-|---------|----------|----------------|
-| **pixo** | **37** | **Excellent test coverage** |
-| oxipng | 33 | Very well-tested (uses C deps) |
-| image | 116 | Less tested |
-| jpeg-encoder | 145 | Moderately tested |
-| mozjpeg | ~2,000+ | Minimally tested |
-| zopfli | 416 | Poorly tested |
+| Library      | LOC/Test | Interpretation                 |
+| ------------ | -------- | ------------------------------ |
+| **pixo**     | **37**   | **Excellent test coverage**    |
+| oxipng       | 33       | Very well-tested (uses C deps) |
+| image        | 116      | Less tested                    |
+| jpeg-encoder | 145      | Moderately tested              |
+| mozjpeg      | ~2,000+  | Minimally tested               |
+| zopfli       | 416      | Poorly tested                  |
 
 ### Comment Density (Code Documentation)
 
-| Library | Comment % | Interpretation |
-|---------|-----------|----------------|
-| image-png | 25.6% | Heavily documented |
-| mozjpeg | 25.2% | Heavily documented (legacy) |
-| **pixo** | **17.9%** | Well documented |
-| jpeg-encoder | 17.6% | Well documented |
-| miniz_oxide | 14.2% | Adequately documented |
+| Library      | Comment % | Interpretation              |
+| ------------ | --------- | --------------------------- |
+| image-png    | 25.6%     | Heavily documented          |
+| mozjpeg      | 25.2%     | Heavily documented (legacy) |
+| **pixo**     | **17.9%** | Well documented             |
+| jpeg-encoder | 17.6%     | Well documented             |
+| miniz_oxide  | 14.2%     | Adequately documented       |
 
 ### Verdict
 
@@ -452,6 +453,7 @@ mod aarch64 {
 - The compression gap (4-5%) comes from **missing 49K lines of hand-tuned assembly**, not from code bloat
 
 The AI-assisted approach traded decades of low-level optimization for:
+
 - Modern safety guarantees
 - High test coverage (47.7% test ratio, 78% line coverage)
 - WASM compatibility
@@ -497,12 +499,12 @@ compiled to WebAssembly via Emscripten.
 
 ### Comparison with pixo
 
-| Metric | pixo | sharp | squoosh |
-|--------|--------|-------|---------|
-| Bundle size (WASM) | **146 KB** | N/A (native) | ~2.1 MB |
-| Dependencies | 0 | libvips (194K LOC) | mozjpeg, oxipng, etc. |
-| Formats | PNG, JPEG | 10+ | 6 |
-| Build complexity | cargo build | Native compilation | Emscripten |
+| Metric             | pixo        | sharp              | squoosh               |
+| ------------------ | ----------- | ------------------ | --------------------- |
+| Bundle size (WASM) | **146 KB**  | N/A (native)       | ~2.1 MB               |
+| Dependencies       | 0           | libvips (194K LOC) | mozjpeg, oxipng, etc. |
+| Formats            | PNG, JPEG   | 10+                | 6                     |
+| Build complexity   | cargo build | Native compilation | Emscripten            |
 
 ---
 
@@ -544,12 +546,12 @@ compiled to WebAssembly via Emscripten.
 
 ### Effective Size for PNG + JPEG Encoding
 
-| Solution | Own Code | Dependencies | Total Effective |
-|----------|----------|--------------|-----------------|
-| **pixo** | 7,893 | 0 | **7,893** |
-| image-png + jpeg-encoder | 9,572 | 4,838 (miniz_oxide) | 14,410 |
-| oxipng + jpeg-encoder | 7,380 | 6,704 (libdeflate) | 14,084 |
-| sharp | 10,127 | 194,229 (libvips) | 204,356 |
+| Solution                 | Own Code | Dependencies        | Total Effective |
+| ------------------------ | -------- | ------------------- | --------------- |
+| **pixo**                 | 7,893    | 0                   | **7,893**       |
+| image-png + jpeg-encoder | 9,572    | 4,838 (miniz_oxide) | 14,410          |
+| oxipng + jpeg-encoder    | 7,380    | 6,704 (libdeflate)  | 14,084          |
+| sharp                    | 10,127   | 194,229 (libvips)   | 204,356         |
 
 ---
 
@@ -557,47 +559,47 @@ compiled to WebAssembly via Emscripten.
 
 ### 1. Test Coverage (Among Self-Contained Libraries)
 
-| Rank | Library | Test % | Tests | Notes |
-|------|---------|--------|-------|-------|
-| 1 | **pixo** | **47.7%** | **507** | **PNG + JPEG, zero deps** |
-| 2 | miniz_oxide | 42.3% | 61 | DEFLATE only |
-| 3 | image-png | 34.3% | 90 | PNG only |
-| 4 | flate2-rs | 28.3% | 62 | Wrapper |
-| 5 | jpeg-encoder | 21.9% | 29 | JPEG only |
-| 6 | image | 21.7% | 289 | Multi-format |
-| 7 | zopfli | 3.2% | 10 | Low coverage |
+| Rank | Library      | Test %    | Tests   | Notes                     |
+| ---- | ------------ | --------- | ------- | ------------------------- |
+| 1    | **pixo**     | **47.7%** | **507** | **PNG + JPEG, zero deps** |
+| 2    | miniz_oxide  | 42.3%     | 61      | DEFLATE only              |
+| 3    | image-png    | 34.3%     | 90      | PNG only                  |
+| 4    | flate2-rs    | 28.3%     | 62      | Wrapper                   |
+| 5    | jpeg-encoder | 21.9%     | 29      | JPEG only                 |
+| 6    | image        | 21.7%     | 289     | Multi-format              |
+| 7    | zopfli       | 3.2%      | 10      | Low coverage              |
 
 ### 2. Code Efficiency (LOC per Test Function)
 
-| Rank | Library | LOC/Test | Interpretation |
-|------|---------|----------|----------------|
-| 1 | oxipng | 33 | Excellent (C deps do heavy lifting) |
-| 2 | **pixo** | **37** | **Excellent (self-contained)** |
-| 3 | flate2-rs | 111 | Good |
-| 4 | image | 116 | Good |
-| 5 | jpeg-encoder | 145 | Moderate |
-| 6 | miniz_oxide | 154 | Moderate |
-| 7 | zopfli | 416 | Poor |
+| Rank | Library      | LOC/Test | Interpretation                      |
+| ---- | ------------ | -------- | ----------------------------------- |
+| 1    | oxipng       | 33       | Excellent (C deps do heavy lifting) |
+| 2    | **pixo**     | **37**   | **Excellent (self-contained)**      |
+| 3    | flate2-rs    | 111      | Good                                |
+| 4    | image        | 116      | Good                                |
+| 5    | jpeg-encoder | 145      | Moderate                            |
+| 6    | miniz_oxide  | 154      | Moderate                            |
+| 7    | zopfli       | 416      | Poor                                |
 
 ### 3. Compactness (For PNG + JPEG Support)
 
-| Rank | Solution | Total LOC | Zero Deps? |
-|------|----------|-----------|------------|
-| 1 | **pixo** | **7,893** | **Yes** |
-| 2 | jpeg-encoder (JPEG only) | 2,846 | Yes |
-| 3 | oxipng + libdeflate (PNG only) | 11,238 | No (C) |
-| 4 | image-png + miniz_oxide (PNG only) | 13,728 | Yes |
-| 5 | image | 21,571+ | No (many deps) |
-| 6 | sharp + libvips | 204,356 | No (C) |
+| Rank | Solution                           | Total LOC | Zero Deps?     |
+| ---- | ---------------------------------- | --------- | -------------- |
+| 1    | **pixo**                           | **7,893** | **Yes**        |
+| 2    | jpeg-encoder (JPEG only)           | 2,846     | Yes            |
+| 3    | oxipng + libdeflate (PNG only)     | 11,238    | No (C)         |
+| 4    | image-png + miniz_oxide (PNG only) | 13,728    | Yes            |
+| 5    | image                              | 21,571+   | No (many deps) |
+| 6    | sharp + libvips                    | 204,356   | No (C)         |
 
 ### 4. Feature Completeness vs Size
 
-| Library | Core LOC | Features | LOC per Feature |
-|---------|----------|----------|-----------------|
-| **pixo** | 7,893 | PNG, JPEG, DEFLATE, SIMD, WASM | **1,579** |
-| jpeg-encoder | 2,846 | JPEG, SIMD | 1,423 |
-| oxipng | 4,534 | PNG optimization | 4,534 |
-| mozjpeg | 68,129 | JPEG (advanced) | 68,129 |
+| Library      | Core LOC | Features                       | LOC per Feature |
+| ------------ | -------- | ------------------------------ | --------------- |
+| **pixo**     | 7,893    | PNG, JPEG, DEFLATE, SIMD, WASM | **1,579**       |
+| jpeg-encoder | 2,846    | JPEG, SIMD                     | 1,423           |
+| oxipng       | 4,534    | PNG optimization               | 4,534           |
+| mozjpeg      | 68,129   | JPEG (advanced)                | 68,129          |
 
 ---
 
@@ -605,37 +607,39 @@ compiled to WebAssembly via Emscripten.
 
 ### How pixo Stacks Up
 
-| Dimension | pixo | Best Alternative | Verdict |
-|-----------|--------|------------------|---------|
-| Test code ratio | 47.7% (8,967 LOC) | miniz_oxide (42.3%) | **Best in class** |
-| Actual code coverage | 79.2% (3,675/4,642 lines) | - | **Excellent** |
-| Zero dependencies | Yes | jpeg-encoder (JPEG only) | **Unique for PNG+JPEG** |
-| Codebase size | 7,893 LOC | jpeg-encoder (2,846) | Compact for scope |
-| Compression quality | 4-5% vs mozjpeg | mozjpeg | Good tradeoff |
-| WASM binary | 146 KB | squoosh (~2 MB) | **Excellent** |
-| Build simplicity | cargo build | sharp (native build) | **Excellent** |
+| Dimension            | pixo                      | Best Alternative         | Verdict                 |
+| -------------------- | ------------------------- | ------------------------ | ----------------------- |
+| Test code ratio      | 47.7% (8,967 LOC)         | miniz_oxide (42.3%)      | **Best in class**       |
+| Actual code coverage | 79.2% (3,675/4,642 lines) | -                        | **Excellent**           |
+| Zero dependencies    | Yes                       | jpeg-encoder (JPEG only) | **Unique for PNG+JPEG** |
+| Codebase size        | 7,893 LOC                 | jpeg-encoder (2,846)     | Compact for scope       |
+| Compression quality  | 4-5% vs mozjpeg           | mozjpeg                  | Good tradeoff           |
+| WASM binary          | 146 KB                    | squoosh (~2 MB)          | **Excellent**           |
+| Build simplicity     | cargo build               | sharp (native build)     | **Excellent**           |
 
 ### The AI-Assisted Advantage
 
 pixo demonstrates that AI-assisted development can produce:
+
 1. **Higher test coverage** than hand-written legacy code
 2. **Compact implementations** (not bloated)
 3. **Modern safety guarantees** (Rust's memory safety)
 4. **Clean architecture** (no decades of legacy)
 
 The tradeoff is:
+
 1. **Less raw optimization** (1.6K vs 50K SIMD lines)
 2. **Slightly larger output** (4-5% vs mozjpeg)
 
 ### When to Choose pixo
 
-| Use Case | Recommendation |
-|----------|----------------|
-| Web application (WASM) | ✅ pixo (146 KB binary) |
-| Zero native dependencies | ✅ pixo (cargo add only) |
-| Maximum compression | ❌ Use mozjpeg/oxipng |
-| Node.js server | ❌ Use sharp (faster native) |
-| Minimal codebase to audit | ✅ pixo (7.9K LOC) |
+| Use Case                    | Recommendation                                  |
+| --------------------------- | ----------------------------------------------- |
+| Web application (WASM)      | ✅ pixo (146 KB binary)                         |
+| Zero native dependencies    | ✅ pixo (cargo add only)                        |
+| Maximum compression         | ❌ Use mozjpeg/oxipng                           |
+| Node.js server              | ❌ Use sharp (faster native)                    |
+| Minimal codebase to audit   | ✅ pixo (7.9K LOC)                              |
 | High test coverage required | ✅ pixo (47.7% test ratio, 79.2% line coverage) |
 
 ### Final Verdict
@@ -650,29 +654,29 @@ The 4-5% compression gap is the cost of maintaining ~7.9K LOC instead of ~68K+ L
 
 ### pixo Component Breakdown
 
-| Component | File | LOC |
-|-----------|------|-----|
-| PNG core | src/png/mod.rs | 2,863 |
-| DEFLATE | src/compress/deflate.rs | 2,602 |
-| JPEG core | src/jpeg/mod.rs | 1,704 |
-| LZ77 | src/compress/lz77.rs | 1,447 |
-| x86 SIMD | src/simd/x86_64.rs | 1,017 |
-| PNG filters | src/png/filter.rs | 940 |
-| JPEG DCT | src/jpeg/dct.rs | 755 |
-| JPEG Huffman | src/jpeg/huffman.rs | 808 |
-| ARM SIMD | src/simd/aarch64.rs | 577 |
-| Progressive JPEG | src/jpeg/progressive.rs | 773 |
+| Component        | File                    | LOC   |
+| ---------------- | ----------------------- | ----- |
+| PNG core         | src/png/mod.rs          | 2,863 |
+| DEFLATE          | src/compress/deflate.rs | 2,602 |
+| JPEG core        | src/jpeg/mod.rs         | 1,704 |
+| LZ77             | src/compress/lz77.rs    | 1,447 |
+| x86 SIMD         | src/simd/x86_64.rs      | 1,017 |
+| PNG filters      | src/png/filter.rs       | 940   |
+| JPEG DCT         | src/jpeg/dct.rs         | 755   |
+| JPEG Huffman     | src/jpeg/huffman.rs     | 808   |
+| ARM SIMD         | src/simd/aarch64.rs     | 577   |
+| Progressive JPEG | src/jpeg/progressive.rs | 773   |
 
 ### Test Distribution
 
-| Location | LOC | Tests |
-|----------|-----|-------|
-| src/ (colocated) | 5,732 | 427 |
-| src/bin/ (CLI) | ~400 | 27 |
-| tests/ | 3,235 | 80 |
-| benches/ | 1,928 | - |
-| web/e2e/ (Playwright) | ~400 | 22 |
-| **Total** | **~11,695** | **507** |
+| Location              | LOC         | Tests   |
+| --------------------- | ----------- | ------- |
+| src/ (colocated)      | 5,732       | 427     |
+| src/bin/ (CLI)        | ~400        | 27      |
+| tests/                | 3,235       | 80      |
+| benches/              | 1,928       | -       |
+| web/e2e/ (Playwright) | ~400        | 22      |
+| **Total**             | **~11,695** | **507** |
 
 Note: Test counts include doctests, property-based tests, and CLI unit tests.
 
@@ -684,38 +688,39 @@ Measured with `cargo tarpaulin`:
 79.17% coverage, 3675/4642 lines covered
 ```
 
-| Component | Lines Covered | Total Lines | Coverage |
-|-----------|---------------|-------------|----------|
-| DEFLATE (deflate.rs) | 709 | 845 | 83.9% |
-| PNG (mod.rs) | 642 | 734 | 87.5% |
-| JPEG (mod.rs) | 524 | 627 | 83.6% |
-| LZ77 (lz77.rs) | 292 | 335 | 87.2% |
-| Huffman (compress) | 115 | 115 | 100.0% |
-| JPEG Huffman | 186 | 188 | 98.9% |
-| JPEG progressive | 148 | 171 | 86.5% |
-| JPEG quantize | 35 | 35 | 100.0% |
-| JPEG trellis | 108 | 110 | 98.2% |
-| JPEG DCT | 172 | 286 | 60.1% |
-| PNG filters | 195 | 222 | 87.8% |
-| PNG bit_depth | 57 | 58 | 98.3% |
-| PNG chunk | 10 | 10 | 100.0% |
-| CRC32 | 43 | 43 | 100.0% |
-| Adler32 | 12 | 13 | 92.3% |
-| Bit writers | 127 | 132 | 96.2% |
-| Color module | 36 | 39 | 92.3% |
-| Error types | 17 | 23 | 73.9% |
-| SIMD x86_64 | 160 | 475 | 33.7%* |
-| SIMD fallback | 64 | 66 | 97.0% |
-| SIMD aarch64 | 0 | 35 | 0.0%* |
+| Component            | Lines Covered | Total Lines | Coverage |
+| -------------------- | ------------- | ----------- | -------- |
+| DEFLATE (deflate.rs) | 709           | 845         | 83.9%    |
+| PNG (mod.rs)         | 642           | 734         | 87.5%    |
+| JPEG (mod.rs)        | 524           | 627         | 83.6%    |
+| LZ77 (lz77.rs)       | 292           | 335         | 87.2%    |
+| Huffman (compress)   | 115           | 115         | 100.0%   |
+| JPEG Huffman         | 186           | 188         | 98.9%    |
+| JPEG progressive     | 148           | 171         | 86.5%    |
+| JPEG quantize        | 35            | 35          | 100.0%   |
+| JPEG trellis         | 108           | 110         | 98.2%    |
+| JPEG DCT             | 172           | 286         | 60.1%    |
+| PNG filters          | 195           | 222         | 87.8%    |
+| PNG bit_depth        | 57            | 58          | 98.3%    |
+| PNG chunk            | 10            | 10          | 100.0%   |
+| CRC32                | 43            | 43          | 100.0%   |
+| Adler32              | 12            | 13          | 92.3%    |
+| Bit writers          | 127           | 132         | 96.2%    |
+| Color module         | 36            | 39          | 92.3%    |
+| Error types          | 17            | 23          | 73.9%    |
+| SIMD x86_64          | 160           | 475         | 33.7%\*  |
+| SIMD fallback        | 64            | 66          | 97.0%    |
+| SIMD aarch64         | 0             | 35          | 0.0%\*   |
 
 \* SIMD code has lower coverage because tests run on specific architectures. ARM NEON code cannot be tested on x86_64 and vice versa.
 
 **Command to regenerate:**
+
 ```bash
 cargo tarpaulin --out Stdout --skip-clean
 ```
 
 ---
 
-*Report generated using cloc v1.98, cargo-tarpaulin, and custom analysis scripts.*
-*Last updated: December 2025*
+_Report generated using cloc v1.98, cargo-tarpaulin, and custom analysis scripts._
+_Last updated: December 2025_
