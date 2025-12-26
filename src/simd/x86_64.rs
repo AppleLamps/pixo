@@ -1243,6 +1243,20 @@ unsafe fn dct_columns_avx2(workspace: &[i32; 64], result: &mut [i32; 64]) {
     // which is what the quantizer expects. The zigzag reordering happens after quantization.
 }
 
+/// Emulate 64-bit arithmetic right shift using SSE2 operations.
+/// AVX-512VL has _mm_sra_epi64, but we need to support AVX2-only CPUs.
+#[inline]
+#[target_feature(enable = "sse2")]
+unsafe fn sra_epi64_const13(v: __m128i) -> __m128i {
+    // Extract to scalar, perform arithmetic shift, reload
+    // This is simpler and more reliable than trying to emulate with SIMD
+    let mut vals = [0i64; 2];
+    _mm_storeu_si128(vals.as_mut_ptr() as *mut __m128i, v);
+    vals[0] >>= dct_constants::CONST_BITS; // Rust arithmetic shift on signed
+    vals[1] >>= dct_constants::CONST_BITS;
+    _mm_loadu_si128(vals.as_ptr() as *const __m128i)
+}
+
 /// AVX2 fixed-point multiply: (a * b) >> CONST_BITS for 8 i32 values
 #[inline]
 #[target_feature(enable = "avx2")]
@@ -1270,12 +1284,12 @@ unsafe fn avx2_fix_mul(a: __m256i, b: __m256i) -> __m256i {
     let mul_1_lo = _mm_mul_epi32(a_lo_shift, b_lo_shift);
     let mul_1_hi = _mm_mul_epi32(a_hi_shift, b_hi_shift);
 
-    // Shift right by CONST_BITS (13)
-    let shift = _mm_set_epi64x(0, dct_constants::CONST_BITS as i64);
-    let shifted_0_lo = _mm_sra_epi64(mul_0_lo, shift);
-    let shifted_0_hi = _mm_sra_epi64(mul_0_hi, shift);
-    let shifted_1_lo = _mm_sra_epi64(mul_1_lo, shift);
-    let shifted_1_hi = _mm_sra_epi64(mul_1_hi, shift);
+    // Shift right by CONST_BITS (13) using SSE2-compatible emulation
+    // Note: _mm_sra_epi64 requires AVX-512VL, which isn't available on all AVX2 CPUs
+    let shifted_0_lo = sra_epi64_const13(mul_0_lo);
+    let shifted_0_hi = sra_epi64_const13(mul_0_hi);
+    let shifted_1_lo = sra_epi64_const13(mul_1_lo);
+    let shifted_1_hi = sra_epi64_const13(mul_1_hi);
 
     // Pack back to 32-bit
     // We need to extract the low 32 bits of each 64-bit result
