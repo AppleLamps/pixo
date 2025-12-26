@@ -140,13 +140,13 @@ All libraries tested at **compression level 6** on 1 MB payloads.
 
 Comparing pixo presets against oxipng and the image crate. All columns show **size / time**.
 
-| Image                       | Dimensions | pixo Fast       | pixo Balanced   | pixo Max        | oxipng          | image crate     | Delta vs oxipng    |
-| --------------------------- | ---------- | --------------- | --------------- | --------------- | --------------- | --------------- | ------------------ |
-| Gradient (512×512)          | 512×512    | 10.9 KB / 1.7ms | 10.1 KB / 4.6ms | 5.0 KB / 23.0s  | 4.3 KB / 112ms  | 76.8 KB / 0.7ms | +134.7% (Balanced) |
-| playground.png              | 1460×1080  | 1.41 MB / 0.4s  | 1.28 MB / 0.2s  | 1.27 MB / 77s   | 1.08 MB / 2.1s  | ~1.4 MB / 0.3s  | +17.5%             |
-| squoosh_example.png         | 1460×1280  | 2.26 MB / 0.2s  | 1.84 MB / 0.4s  | 1.77 MB / 41s   | 1.56 MB / 1.8s  | ~2.0 MB / 0.4s  | +13.9%             |
-| squoosh_example_palette.png | 800×600    | 262 KB / 48ms   | 144 KB / 45ms   | 141 KB / 2.8s   | 102 KB / 0.9s   | ~180 KB / 50ms  | +39.0%             |
-| rocket.png                  | 800×600    | 1.64 MB / 0.1s  | 1.33 MB / 0.2s  | 1.32 MB / 15s   | 1.22 MB / 1.2s  | ~1.5 MB / 0.2s  | +7.7%              |
+| Image                       | Dimensions | pixo Fast       | pixo Balanced   | pixo Max       | oxipng         | image crate     | Delta vs oxipng    |
+| --------------------------- | ---------- | --------------- | --------------- | -------------- | -------------- | --------------- | ------------------ |
+| Gradient (512×512)          | 512×512    | 10.9 KB / 1.7ms | 10.1 KB / 4.6ms | 5.0 KB / 23.0s | 4.3 KB / 112ms | 76.8 KB / 0.7ms | +134.7% (Balanced) |
+| playground.png              | 1460×1080  | 1.41 MB / 0.4s  | 1.28 MB / 0.2s  | 1.27 MB / 77s  | 1.08 MB / 2.1s | ~1.4 MB / 0.3s  | +17.5%             |
+| squoosh_example.png         | 1460×1280  | 2.26 MB / 0.2s  | 1.84 MB / 0.4s  | 1.77 MB / 41s  | 1.56 MB / 1.8s | ~2.0 MB / 0.4s  | +13.9%             |
+| squoosh_example_palette.png | 800×600    | 262 KB / 48ms   | 144 KB / 45ms   | 141 KB / 2.8s  | 102 KB / 0.9s  | ~180 KB / 50ms  | +39.0%             |
+| rocket.png                  | 800×600    | 1.64 MB / 0.1s  | 1.33 MB / 0.2s  | 1.32 MB / 15s  | 1.22 MB / 1.2s | ~1.5 MB / 0.2s  | +7.7%              |
 
 ### PNG Preset Summary
 
@@ -178,28 +178,28 @@ Testing on actual images from the test fixtures:
 
 | Image            | Dimensions | pixo Lossy | pngquant | Delta    | Winner   |
 | ---------------- | ---------- | ---------- | -------- | -------- | -------- |
-| avatar-color.png | 740×740    | 123.1 KB   | 113.1 KB | +9%      | pngquant |
-| rocket.png       | 1376×768   | 286.2 KB   | 392.9 KB | **-27%** | **pixo** |
+| avatar-color.png | 740×740    | 128.0 KB   | 113.1 KB | +13%     | pngquant |
+| rocket.png       | 1376×768   | 277.9 KB   | 392.9 KB | **-29%** | **pixo** |
 
 **Key findings:**
 
-- On images with solid colors/flat areas (rocket.png), **pixo wins by 28%**
+- On images with solid colors/flat areas (rocket.png), **pixo wins by 29%**
 - On complex photographic images, pngquant's libimagequant produces smaller files
 - Both achieve **50-80% reduction** compared to lossless PNG
-- pixo has zero external dependencies (147 KB WASM vs pngquant's native binary)
+- pixo has zero external dependencies (152 KB WASM vs pngquant's native binary)
 
 ### Synthetic Benchmark (512×512 gradient)
 
 Gradient images are a **worst-case scenario** for quantization because they contain many unique colors that require dithering, making compression less effective.
 
-| Encoder       | Size    | Time     | Notes                              |
-| ------------- | ------- | -------- | ---------------------------------- |
-| pixo Lossless | 10.1 KB | 4.64 ms  | Baseline (no quantization)         |
-| pixo Lossy    | 5.9 KB  | 7.99 ms  | 256 colors, no dithering (-41.5%)  |
-| imagequant    | 64.4 KB | 40.72 ms | libimagequant (dithered, larger)   |
-| pngquant      | 61.6 KB | 56.46 ms | --quality=65-80 (dithered, larger) |
+| Encoder       | Size    | Time    | Notes                              |
+| ------------- | ------- | ------- | ---------------------------------- |
+| pixo Lossless | 10.1 KB | 4.61 ms | Baseline (no quantization)         |
+| pixo Lossy    | 4.4 KB  | 11.6 ms | 256 colors, no dithering (-56.5%)  |
+| imagequant    | 64.4 KB | 40.6 ms | libimagequant (dithered, larger)   |
+| pngquant      | 61.6 KB | 62.4 ms | --quality=65-80 (dithered, larger) |
 
-> **Note**: On gradient images, the dithering applied by imagequant/pngquant creates noise patterns that are harder to compress with DEFLATE. pixo's simpler median-cut without dithering produces better results for this edge case.
+> **Note**: On gradient images, the dithering applied by imagequant/pngquant creates noise patterns that are harder to compress with DEFLATE. pixo's median-cut with perceptual weighting and K-means refinement produces better results for this edge case.
 
 ### When to Use Lossy PNG
 
@@ -209,15 +209,15 @@ Gradient images are a **worst-case scenario** for quantization because they cont
 | **Images with flat colors/UI**      | pixo Lossy often beats pngquant            |
 | **Complex photos, max compression** | pngquant produces smaller files            |
 | **Icons and logos (<256 colors)**   | Use lossless - already optimized           |
-| **WASM bundle size matters**        | pixo Lossy (no external deps, 147 KB WASM) |
+| **WASM bundle size matters**        | pixo Lossy (no external deps, 152 KB WASM) |
 
 ### Lossy PNG Settings
 
-| Tool       | Settings                                                                |
-| ---------- | ----------------------------------------------------------------------- |
-| pixo Lossy | median-cut quantization, 256 colors, optional Floyd-Steinberg dithering |
-| pngquant   | `--quality=65-80 --speed=4` (libimagequant internally)                  |
-| imagequant | Rust bindings to libimagequant library                                  |
+| Tool       | Settings                                                                                  |
+| ---------- | ----------------------------------------------------------------------------------------- |
+| pixo Lossy | median-cut with perceptual weighting, K-means refinement, optional Floyd-Steinberg dither |
+| pngquant   | `--quality=65-80 --speed=4` (libimagequant internally)                                    |
+| imagequant | Rust bindings to libimagequant library                                                    |
 
 ---
 
@@ -259,7 +259,7 @@ Critical for web applications where bundle size impacts load time.
 
 | Library         | WASM Size  | Notes                               |
 | --------------- | ---------- | ----------------------------------- |
-| **pixo**        | **147 KB** | Zero deps, pure Rust, lossy PNG [1] |
+| **pixo**        | **152 KB** | Zero deps, pure Rust, lossy PNG [1] |
 | wasm-mozjpeg    | ~208 KB    | Emscripten compiled                 |
 | squoosh oxipng  | ~625 KB    | Google's Squoosh codec              |
 | squoosh mozjpeg | ~803 KB    | Google's Squoosh codec              |
@@ -278,7 +278,7 @@ panic = "abort"      # Remove unwinding code
 strip = true         # Strip symbols
 ```
 
-Build command for the 147 KB binary:
+Build command for the 152 KB binary:
 
 ```bash
 cargo build --target wasm32-unknown-unknown --release --no-default-features --features wasm,simd
@@ -299,7 +299,7 @@ Comparison of Rust image compression libraries.
 
 | Library        | WASM-friendly   | Binary Size  | Throughput | SIMD Support | Notes                                          |
 | -------------- | --------------- | ------------ | ---------- | ------------ | ---------------------------------------------- |
-| **pixo**       | Yes             | ~147 KB      | Excellent  | NEON + AVX2  | Zero deps, pure Rust, lossy PNG, parallel JPEG |
+| **pixo**       | Yes             | ~152 KB      | Excellent  | NEON + AVX2  | Zero deps, pure Rust, lossy PNG, parallel JPEG |
 | `image`        | Yes             | ~2-4 MB      | Good       | Limited      | Pure Rust, many codecs included                |
 | `jpeg-encoder` | Yes             | ~50 KB       | Excellent  | AVX2         | Pure Rust JPEG encoder, SIMD optimized         |
 | `lodepng`      | No (C bindings) | N/A          | Excellent  | No           | C lodepng library bindings                     |
@@ -421,7 +421,7 @@ cargo build --release --no-default-features --features simd
 
 | If you need...             | PNG                 | JPEG                | Why                                |
 | -------------------------- | ------------------- | ------------------- | ---------------------------------- |
-| Smallest WASM binary       | pixo (147 KB)       | pixo (147 KB)       | 4× smaller than Squoosh            |
+| Smallest WASM binary       | pixo (152 KB)       | pixo (152 KB)       | 4× smaller than Squoosh            |
 | Best lossless compression  | oxipng              | N/A                 | Gold standard, but larger binaries |
 | Best lossy PNG compression | pixo Lossy/pngquant | N/A                 | 50-80% smaller than lossless       |
 | Fastest encoding           | pixo Fast or image  | pixo Fast           | Minimal overhead                   |
@@ -452,7 +452,7 @@ Even "Rust" libraries often delegate the heavy lifting to C. oxipng's compressio
 
 1. **Portability**: pixo compiles to WASM without Emscripten. No C toolchain needed. Works identically on every platform.
 
-2. **Tiny binaries**: 147 KB WASM binary vs 600-800 KB for Squoosh codecs. This matters for web apps where every kilobyte counts.
+2. **Tiny binaries**: 152 KB WASM binary vs 600-800 KB for Squoosh codecs. This matters for web apps where every kilobyte counts.
 
 3. **Auditability**: One language, one codebase. No FFI boundaries to cross, no C memory safety concerns.
 
@@ -466,7 +466,7 @@ Being pure Rust with zero dependencies means accepting some compression ratio ga
 | --------------------- | ------ | --------------------------------------------- |
 | PNG Max vs oxipng     | +8-17% | libdeflate has 20+ years of C optimization    |
 | JPEG Max vs mozjpeg   | +4-5%  | mozjpeg has sophisticated trellis refinement  |
-| Lossy PNG vs pngquant | +9%    | libimagequant uses advanced k-means iteration |
+| Lossy PNG vs pngquant | +13%   | libimagequant uses 100+ k-means iterations    |
 
 These gaps are the cost of independence. For many use cases—especially web applications where binary size matters—the tradeoffs are worth it.
 
@@ -474,7 +474,7 @@ These gaps are the cost of independence. For many use cases—especially web app
 
 | Scenario                                     | Recommendation                                        |
 | -------------------------------------------- | ----------------------------------------------------- |
-| **Building a web app with WASM?**            | Use pixo (147 KB binary, good compression)            |
+| **Building a web app with WASM?**            | Use pixo (152 KB binary, good compression)            |
 | **Need smallest PNG file size?**             | Use pixo Lossy (50-80% smaller than lossless)         |
 | **Want zero native dependencies?**           | Use pixo (pure Rust, no C toolchain)                  |
 | **Need predictable output across browsers?** | Use pixo (identical output everywhere)                |

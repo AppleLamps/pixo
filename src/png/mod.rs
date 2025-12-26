@@ -1172,26 +1172,38 @@ impl ColorBox {
         }
     }
 
-    fn range(&self) -> (u8, u8) {
+    /// Returns (channel_to_split, perceptual_score).
+    ///
+    /// Uses perceptual weighting: G (4) > R (2) > B (1), with alpha weighted at 3.
+    /// This matches human visual sensitivity where green contributes most to
+    /// perceived luminance.
+    fn range(&self) -> (u8, u16) {
         let r_range = self.r_max - self.r_min;
         let g_range = self.g_max - self.g_min;
         let b_range = self.b_max - self.b_min;
         let a_range = self.a_max - self.a_min;
-        let mut max_range = r_range;
+
+        // Perceptual weights: G > A > R > B
+        let r_score = r_range as u16 * 2;
+        let g_score = g_range as u16 * 4; // Green most important (luminance)
+        let b_score = b_range as u16; // Blue least important
+        let a_score = a_range as u16 * 3; // Alpha fairly important for transparency
+
+        let mut max_score = r_score;
         let mut channel = 0u8;
-        if g_range > max_range {
-            max_range = g_range;
+        if g_score > max_score {
+            max_score = g_score;
             channel = 1;
         }
-        if b_range > max_range {
-            max_range = b_range;
+        if b_score > max_score {
+            max_score = b_score;
             channel = 2;
         }
-        if a_range > max_range {
-            max_range = a_range;
+        if a_score > max_score {
+            max_score = a_score;
             channel = 3;
         }
-        (channel, max_range)
+        (channel, max_score)
     }
 
     fn can_split(&self) -> bool {
@@ -1259,6 +1271,10 @@ fn median_cut_palette(colors: Vec<ColorCount>, max_colors: usize) -> Vec<[u8; 4]
     if colors.is_empty() {
         return vec![[0, 0, 0, 255]];
     }
+
+    // Keep a reference to colors for K-means refinement
+    let colors_for_kmeans = colors.clone();
+
     let mut boxes = vec![ColorBox::from_colors(colors)];
     while boxes.len() < max_colors {
         // pick box with largest range
@@ -1283,18 +1299,94 @@ fn median_cut_palette(colors: Vec<ColorCount>, max_colors: usize) -> Vec<[u8; 4]
         }
     }
 
-    boxes.into_iter().map(|b| b.make_palette_entry()).collect()
+    let mut palette: Vec<[u8; 4]> = boxes.into_iter().map(|b| b.make_palette_entry()).collect();
+
+    // Refine palette with K-means iterations for better photographic quality
+    refine_palette_kmeans(&mut palette, &colors_for_kmeans);
+
+    palette
+}
+
+/// Refine palette colors using K-means iterations.
+///
+/// After median-cut produces an initial palette, K-means refinement adjusts
+/// each palette color to be the weighted centroid of the colors assigned to it.
+/// This improves quality for photographic content with smooth gradients.
+fn refine_palette_kmeans(palette: &mut [[u8; 4]], colors: &[ColorCount]) {
+    const ITERATIONS: usize = 2;
+
+    if palette.is_empty() || colors.is_empty() {
+        return;
+    }
+
+    for _ in 0..ITERATIONS {
+        // Accumulators for each palette entry: (r_sum, g_sum, b_sum, a_sum, total_count)
+        let mut accumulators: Vec<(u64, u64, u64, u64, u64)> = vec![(0, 0, 0, 0, 0); palette.len()];
+
+        // Assign each color to nearest palette entry and accumulate
+        for color in colors {
+            let mut best_idx = 0;
+            let mut best_dist = u32::MAX;
+            for (i, p) in palette.iter().enumerate() {
+                let dist = perceptual_distance_sq(color.rgba, *p);
+                if dist < best_dist {
+                    best_dist = dist;
+                    best_idx = i;
+                }
+            }
+
+            let count = color.count as u64;
+            let acc = &mut accumulators[best_idx];
+            acc.0 += color.rgba[0] as u64 * count;
+            acc.1 += color.rgba[1] as u64 * count;
+            acc.2 += color.rgba[2] as u64 * count;
+            acc.3 += color.rgba[3] as u64 * count;
+            acc.4 += count;
+        }
+
+        // Update palette entries to be centroids of assigned colors
+        for (i, acc) in accumulators.iter().enumerate() {
+            if acc.4 > 0 {
+                palette[i] = [
+                    (acc.0 / acc.4) as u8,
+                    (acc.1 / acc.4) as u8,
+                    (acc.2 / acc.4) as u8,
+                    (acc.3 / acc.4) as u8,
+                ];
+            }
+        }
+    }
+}
+
+/// Perceptual color distance (squared) using weighted RGB.
+///
+/// Uses weights that approximate human color perception: green contributes most
+/// to perceived luminance, followed by red, then blue. This is better than
+/// Euclidean RGB distance for skin tones and gradients.
+///
+/// Weights are based on typical luminance perception: Y = 0.299R + 0.587G + 0.114B
+/// Simplified to integer ratios: R=3, G=4, B=1 (approximately 3:6:1 squared).
+#[inline]
+fn perceptual_distance_sq(c1: [u8; 4], c2: [u8; 4]) -> u32 {
+    let dr = c1[0] as i32 - c2[0] as i32;
+    let dg = c1[1] as i32 - c2[1] as i32;
+    let db = c1[2] as i32 - c2[2] as i32;
+    let da = c1[3] as i32 - c2[3] as i32;
+
+    // Perceptual weights: G (4) > R (3) > B (1)
+    // Based on human luminance sensitivity
+    const R_WEIGHT: i32 = 3;
+    const G_WEIGHT: i32 = 4;
+    const B_WEIGHT: i32 = 1;
+
+    (R_WEIGHT * dr * dr + G_WEIGHT * dg * dg + B_WEIGHT * db * db + da * da) as u32
 }
 
 fn nearest_palette_index(color: [u8; 4], palette: &[[u8; 4]]) -> u8 {
     let mut best_idx = 0u8;
     let mut best_dist = u32::MAX;
     for (i, p) in palette.iter().enumerate() {
-        let dr = color[0] as i32 - p[0] as i32;
-        let dg = color[1] as i32 - p[1] as i32;
-        let db = color[2] as i32 - p[2] as i32;
-        let da = color[3] as i32 - p[3] as i32;
-        let dist = (dr * dr + dg * dg + db * db + da * da) as u32;
+        let dist = perceptual_distance_sq(color, *p);
         if dist < best_dist {
             best_dist = dist;
             best_idx = i as u8;
@@ -2625,11 +2717,11 @@ mod tests {
         ];
         let b = ColorBox::from_colors(colors);
 
-        let (channel, max_range) = b.range();
-        // R has range 255, which ties with A (also 255).
-        // Since the function only replaces on strictly greater, R wins (channel 0)
-        assert_eq!(channel, 0);
-        assert_eq!(max_range, 255);
+        let (channel, max_score) = b.range();
+        // With perceptual weighting: R*2=510, G*4=400, B*1=50, A*3=765
+        // Alpha channel wins with highest perceptual score
+        assert_eq!(channel, 3);
+        assert_eq!(max_score, 765);
     }
 
     #[test]
@@ -2862,5 +2954,253 @@ mod tests {
         let (all_opaque, all_gray) = analyze_rgba(&data);
         assert!(!all_gray);
         assert!(all_opaque);
+    }
+
+    // =========================================================================
+    // Perceptual distance tests
+    // =========================================================================
+
+    #[test]
+    fn test_perceptual_distance_identical() {
+        // Identical colors should have distance 0
+        let c = [128, 64, 192, 255];
+        assert_eq!(perceptual_distance_sq(c, c), 0);
+    }
+
+    #[test]
+    fn test_perceptual_distance_green_weighted() {
+        // Green differences should contribute more than red/blue
+        let base = [128, 128, 128, 255];
+        let red_diff = [138, 128, 128, 255]; // +10 red
+        let green_diff = [128, 138, 128, 255]; // +10 green
+        let blue_diff = [128, 128, 138, 255]; // +10 blue
+
+        let d_red = perceptual_distance_sq(base, red_diff);
+        let d_green = perceptual_distance_sq(base, green_diff);
+        let d_blue = perceptual_distance_sq(base, blue_diff);
+
+        assert!(
+            d_green > d_red,
+            "green should be weighted higher than red: {d_green} vs {d_red}"
+        );
+        assert!(
+            d_red > d_blue,
+            "red should be weighted higher than blue: {d_red} vs {d_blue}"
+        );
+    }
+
+    #[test]
+    fn test_perceptual_distance_symmetry() {
+        // Distance should be symmetric
+        let c1 = [100, 150, 200, 255];
+        let c2 = [50, 100, 150, 200];
+        assert_eq!(
+            perceptual_distance_sq(c1, c2),
+            perceptual_distance_sq(c2, c1)
+        );
+    }
+
+    #[test]
+    fn test_perceptual_distance_alpha() {
+        // Alpha differences should contribute to distance
+        let c1 = [100, 100, 100, 255];
+        let c2 = [100, 100, 100, 200];
+        assert!(
+            perceptual_distance_sq(c1, c2) > 0,
+            "alpha difference should produce non-zero distance"
+        );
+    }
+
+    // =========================================================================
+    // K-means refinement tests
+    // =========================================================================
+
+    #[test]
+    fn test_kmeans_refinement_empty_inputs() {
+        // Should handle empty inputs gracefully
+        let mut empty_palette: Vec<[u8; 4]> = vec![];
+        let colors = vec![ColorCount {
+            rgba: [100, 100, 100, 255],
+            count: 10,
+        }];
+        refine_palette_kmeans(&mut empty_palette, &colors);
+        assert!(empty_palette.is_empty());
+
+        let mut palette = vec![[100, 100, 100, 255]];
+        let empty_colors: Vec<ColorCount> = vec![];
+        refine_palette_kmeans(&mut palette, &empty_colors);
+        // Palette should remain unchanged
+        assert_eq!(palette[0], [100, 100, 100, 255]);
+    }
+
+    #[test]
+    fn test_kmeans_refinement_single_color() {
+        // Single color should converge to that color
+        let mut palette = vec![[50, 50, 50, 255]];
+        let colors = vec![ColorCount {
+            rgba: [100, 150, 200, 255],
+            count: 100,
+        }];
+        refine_palette_kmeans(&mut palette, &colors);
+        // Palette should move toward the color
+        assert_eq!(palette[0], [100, 150, 200, 255]);
+    }
+
+    #[test]
+    fn test_kmeans_refinement_two_clusters() {
+        // Two distinct color clusters should refine to cluster centers
+        let mut palette = vec![
+            [50, 50, 50, 255],    // Initial guess for dark cluster
+            [200, 200, 200, 255], // Initial guess for light cluster
+        ];
+        let colors = vec![
+            ColorCount {
+                rgba: [0, 0, 0, 255],
+                count: 100,
+            },
+            ColorCount {
+                rgba: [10, 10, 10, 255],
+                count: 100,
+            },
+            ColorCount {
+                rgba: [245, 245, 245, 255],
+                count: 100,
+            },
+            ColorCount {
+                rgba: [255, 255, 255, 255],
+                count: 100,
+            },
+        ];
+        refine_palette_kmeans(&mut palette, &colors);
+
+        // Dark palette entry should be around (0+10)/2 = 5
+        assert!(palette[0][0] < 20, "dark cluster should be dark");
+        // Light palette entry should be around (245+255)/2 = 250
+        assert!(palette[1][0] > 230, "light cluster should be light");
+    }
+
+    #[test]
+    fn test_kmeans_refinement_weighted() {
+        // Higher count colors should have more influence
+        let mut palette = vec![[128, 128, 128, 255]];
+        let colors = vec![
+            ColorCount {
+                rgba: [0, 0, 0, 255],
+                count: 1, // Low weight
+            },
+            ColorCount {
+                rgba: [200, 200, 200, 255],
+                count: 100, // High weight
+            },
+        ];
+        refine_palette_kmeans(&mut palette, &colors);
+        // Result should be much closer to [200, 200, 200] than [0, 0, 0]
+        assert!(
+            palette[0][0] > 150,
+            "should be closer to high-weight color: {}",
+            palette[0][0]
+        );
+    }
+
+    // =========================================================================
+    // Integration tests for quantization quality
+    // =========================================================================
+
+    #[test]
+    fn test_quantization_produces_valid_palette() {
+        // Create an image with a gradient of skin-tone-like colors
+        // This tests that perceptual quantization works for photographic content
+        let mut pixels = Vec::with_capacity(64 * 64 * 3);
+        for y in 0..64 {
+            for x in 0..64 {
+                // Skin-tone gradient (warm colors)
+                let r = 180 + (x as u8 / 2);
+                let g = 140 + (y as u8 / 2);
+                let b = 120;
+                pixels.push(r);
+                pixels.push(g);
+                pixels.push(b);
+            }
+        }
+
+        let opts = PngOptions {
+            quantization: QuantizationOptions {
+                mode: QuantizationMode::Force,
+                max_colors: 32,
+                dithering: false,
+            },
+            ..Default::default()
+        };
+
+        let png = encode_with_options(&pixels, 64, 64, ColorType::Rgb, &opts).unwrap();
+
+        // Should produce indexed PNG (color type 3)
+        assert_eq!(png[25], 3, "should produce indexed PNG");
+        // Should have PLTE chunk
+        assert!(
+            png.windows(4).any(|w| w == b"PLTE"),
+            "should have PLTE chunk"
+        );
+        // Should be valid PNG
+        assert_eq!(&png[0..8], &PNG_SIGNATURE);
+    }
+
+    #[test]
+    fn test_quantization_skin_tones_preserved() {
+        // Create a simple image with skin-tone colors
+        // The perceptual quantization should preserve these well
+        let skin_colors = [
+            [232, 190, 172], // Light skin
+            [198, 134, 103], // Medium skin
+            [141, 85, 64],   // Dark skin
+        ];
+
+        let mut pixels = Vec::new();
+        for color in &skin_colors {
+            for _ in 0..100 {
+                pixels.extend_from_slice(color);
+            }
+        }
+
+        let opts = PngOptions {
+            quantization: QuantizationOptions {
+                mode: QuantizationMode::Force,
+                max_colors: 8,
+                dithering: false,
+            },
+            ..Default::default()
+        };
+
+        // Should encode without error
+        let result = encode_with_options(&pixels, 10, 30, ColorType::Rgb, &opts);
+        assert!(result.is_ok(), "should encode skin tones successfully");
+    }
+
+    #[test]
+    fn test_quantization_gradient_with_dithering() {
+        // Create a gradient image
+        let mut pixels = Vec::with_capacity(32 * 32 * 3);
+        for y in 0..32 {
+            for x in 0..32 {
+                pixels.push((x * 8) as u8);
+                pixels.push((y * 8) as u8);
+                pixels.push(128);
+            }
+        }
+
+        let opts = PngOptions {
+            quantization: QuantizationOptions {
+                mode: QuantizationMode::Force,
+                max_colors: 16,
+                dithering: true, // Enable dithering
+            },
+            ..Default::default()
+        };
+
+        let png = encode_with_options(&pixels, 32, 32, ColorType::Rgb, &opts).unwrap();
+
+        // Should produce indexed PNG
+        assert_eq!(png[25], 3, "should produce indexed PNG with dithering");
+        assert_eq!(&png[0..8], &PNG_SIGNATURE);
     }
 }
