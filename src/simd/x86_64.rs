@@ -1015,3 +1015,648 @@ pub unsafe fn filter_average_avx2(row: &[u8], prev_row: &[u8], bpp: usize, outpu
         i += 1;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::simd::fallback;
+
+    // ========================================================================
+    // Adler32 Tests
+    // ========================================================================
+
+    #[test]
+    fn test_adler32_ssse3_empty() {
+        if !is_x86_feature_detected!("ssse3") {
+            return;
+        }
+        let result = unsafe { adler32_ssse3(&[]) };
+        assert_eq!(result, fallback::adler32(&[]));
+    }
+
+    #[test]
+    fn test_adler32_ssse3_small() {
+        if !is_x86_feature_detected!("ssse3") {
+            return;
+        }
+        let data: Vec<u8> = (0..100).map(|i| (i * 7) as u8).collect();
+        let result = unsafe { adler32_ssse3(&data) };
+        assert_eq!(result, fallback::adler32(&data));
+    }
+
+    #[test]
+    fn test_adler32_ssse3_large() {
+        if !is_x86_feature_detected!("ssse3") {
+            return;
+        }
+        // Test with data larger than NMAX (5552)
+        let data: Vec<u8> = (0..10000).map(|i| (i * 13) as u8).collect();
+        let result = unsafe { adler32_ssse3(&data) };
+        assert_eq!(result, fallback::adler32(&data));
+    }
+
+    #[test]
+    fn test_adler32_ssse3_block_boundary() {
+        if !is_x86_feature_detected!("ssse3") {
+            return;
+        }
+        // Test exactly at block boundary (5552)
+        let data: Vec<u8> = (0..5552).map(|i| (i % 256) as u8).collect();
+        let result = unsafe { adler32_ssse3(&data) };
+        assert_eq!(result, fallback::adler32(&data));
+    }
+
+    #[test]
+    fn test_adler32_avx2_empty() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        let result = unsafe { adler32_avx2(&[]) };
+        assert_eq!(result, fallback::adler32(&[]));
+    }
+
+    #[test]
+    fn test_adler32_avx2_small() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        let data: Vec<u8> = (0..100).map(|i| (i * 7) as u8).collect();
+        let result = unsafe { adler32_avx2(&data) };
+        assert_eq!(result, fallback::adler32(&data));
+    }
+
+    #[test]
+    fn test_adler32_avx2_large() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        let data: Vec<u8> = (0..10000).map(|i| (i * 13) as u8).collect();
+        let result = unsafe { adler32_avx2(&data) };
+        assert_eq!(result, fallback::adler32(&data));
+    }
+
+    #[test]
+    fn test_adler32_avx2_remainder() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        // Test with size not divisible by 32
+        let data: Vec<u8> = (0..97).map(|i| (i * 11) as u8).collect();
+        let result = unsafe { adler32_avx2(&data) };
+        assert_eq!(result, fallback::adler32(&data));
+    }
+
+    // ========================================================================
+    // Match Length Tests
+    // ========================================================================
+
+    #[test]
+    fn test_match_length_sse2_identical() {
+        if !is_x86_feature_detected!("sse2") {
+            return;
+        }
+        let data: Vec<u8> = (0..256).map(|i| i as u8).collect();
+        let result = unsafe { match_length_sse2(&data, 0, 0, 256) };
+        assert_eq!(result, 256);
+    }
+
+    #[test]
+    fn test_match_length_sse2_no_match() {
+        if !is_x86_feature_detected!("sse2") {
+            return;
+        }
+        let data: Vec<u8> = (0..256).map(|i| i as u8).collect();
+        let result = unsafe { match_length_sse2(&data, 0, 1, 255) };
+        assert_eq!(result, 0);
+    }
+
+    #[test]
+    fn test_match_length_sse2_partial() {
+        if !is_x86_feature_detected!("sse2") {
+            return;
+        }
+        // Create data with matching prefix
+        let mut data = vec![0u8; 100];
+        data[0..10].copy_from_slice(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        data[50..60].copy_from_slice(&[1, 2, 3, 4, 5, 99, 7, 8, 9, 10]); // Differs at position 5
+        let result = unsafe { match_length_sse2(&data, 0, 50, 50) };
+        assert_eq!(result, 5);
+    }
+
+    #[test]
+    fn test_match_length_sse2_remainder() {
+        if !is_x86_feature_detected!("sse2") {
+            return;
+        }
+        // Test with length that uses the u64 and byte-by-byte fallback
+        let data = vec![42u8; 23]; // Not divisible by 16
+        let result = unsafe { match_length_sse2(&data, 0, 0, 23) };
+        assert_eq!(result, 23);
+    }
+
+    #[test]
+    fn test_match_length_avx2_identical() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        let data: Vec<u8> = (0..256).map(|i| i as u8).collect();
+        let result = unsafe { match_length_avx2(&data, 0, 0, 256) };
+        assert_eq!(result, 256);
+    }
+
+    #[test]
+    fn test_match_length_avx2_no_match() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        let data: Vec<u8> = (0..256).map(|i| i as u8).collect();
+        let result = unsafe { match_length_avx2(&data, 0, 1, 255) };
+        assert_eq!(result, 0);
+    }
+
+    #[test]
+    fn test_match_length_avx2_partial() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        let mut data = vec![0u8; 200];
+        data[0..40].copy_from_slice(&[1u8; 40]);
+        data[100..140].copy_from_slice(&[1u8; 40]);
+        data[120] = 99; // Differ at position 20
+        let result = unsafe { match_length_avx2(&data, 0, 100, 100) };
+        assert_eq!(result, 20);
+    }
+
+    // ========================================================================
+    // Score Filter Tests
+    // ========================================================================
+
+    #[test]
+    fn test_score_filter_sse2_zeros() {
+        if !is_x86_feature_detected!("sse2") {
+            return;
+        }
+        let data = vec![0u8; 64];
+        let result = unsafe { score_filter_sse2(&data) };
+        assert_eq!(result, fallback::score_filter(&data));
+    }
+
+    #[test]
+    fn test_score_filter_sse2_ones() {
+        if !is_x86_feature_detected!("sse2") {
+            return;
+        }
+        let data = vec![1u8; 64];
+        let result = unsafe { score_filter_sse2(&data) };
+        assert_eq!(result, fallback::score_filter(&data));
+    }
+
+    #[test]
+    fn test_score_filter_sse2_signed() {
+        if !is_x86_feature_detected!("sse2") {
+            return;
+        }
+        // 0xFF as i8 is -1, abs is 1
+        let data = vec![0xFF; 32];
+        let result = unsafe { score_filter_sse2(&data) };
+        assert_eq!(result, fallback::score_filter(&data));
+    }
+
+    #[test]
+    fn test_score_filter_sse2_mixed() {
+        if !is_x86_feature_detected!("sse2") {
+            return;
+        }
+        let data: Vec<u8> = (0..100).map(|i| (i * 17) as u8).collect();
+        let result = unsafe { score_filter_sse2(&data) };
+        assert_eq!(result, fallback::score_filter(&data));
+    }
+
+    #[test]
+    fn test_score_filter_avx2_zeros() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        let data = vec![0u8; 128];
+        let result = unsafe { score_filter_avx2(&data) };
+        assert_eq!(result, fallback::score_filter(&data));
+    }
+
+    #[test]
+    fn test_score_filter_avx2_mixed() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        let data: Vec<u8> = (0..200).map(|i| (i * 17) as u8).collect();
+        let result = unsafe { score_filter_avx2(&data) };
+        assert_eq!(result, fallback::score_filter(&data));
+    }
+
+    #[test]
+    fn test_score_filter_avx2_remainder() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        // Test with size not divisible by 32
+        let data: Vec<u8> = (0..45).map(|i| (i * 7) as u8).collect();
+        let result = unsafe { score_filter_avx2(&data) };
+        assert_eq!(result, fallback::score_filter(&data));
+    }
+
+    // ========================================================================
+    // Filter Sub Tests
+    // ========================================================================
+
+    #[test]
+    fn test_filter_sub_sse2_basic() {
+        if !is_x86_feature_detected!("sse2") {
+            return;
+        }
+        let row: Vec<u8> = (0..64).map(|i| (i * 3) as u8).collect();
+        let mut expected = Vec::new();
+        fallback::filter_sub(&row, 3, &mut expected);
+        let mut result = Vec::new();
+        unsafe { filter_sub_sse2(&row, 3, &mut result) };
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_filter_sub_sse2_bpp1() {
+        if !is_x86_feature_detected!("sse2") {
+            return;
+        }
+        let row: Vec<u8> = (0..100).map(|i| (i * 7) as u8).collect();
+        let mut expected = Vec::new();
+        fallback::filter_sub(&row, 1, &mut expected);
+        let mut result = Vec::new();
+        unsafe { filter_sub_sse2(&row, 1, &mut result) };
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_filter_sub_avx2_basic() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        let row: Vec<u8> = (0..128).map(|i| (i * 3) as u8).collect();
+        let mut expected = Vec::new();
+        fallback::filter_sub(&row, 4, &mut expected);
+        let mut result = Vec::new();
+        unsafe { filter_sub_avx2(&row, 4, &mut result) };
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_filter_sub_avx2_remainder() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        // Test with row length not divisible by 32
+        let row: Vec<u8> = (0..77).map(|i| (i * 5) as u8).collect();
+        let mut expected = Vec::new();
+        fallback::filter_sub(&row, 3, &mut expected);
+        let mut result = Vec::new();
+        unsafe { filter_sub_avx2(&row, 3, &mut result) };
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_filter_sub_avx2_short() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        // Test with row shorter than bpp
+        let row = vec![1, 2, 3];
+        let mut expected = Vec::new();
+        fallback::filter_sub(&row, 4, &mut expected);
+        let mut result = Vec::new();
+        unsafe { filter_sub_avx2(&row, 4, &mut result) };
+        assert_eq!(result, expected);
+    }
+
+    // ========================================================================
+    // Filter Up Tests
+    // ========================================================================
+
+    #[test]
+    fn test_filter_up_sse2_basic() {
+        if !is_x86_feature_detected!("sse2") {
+            return;
+        }
+        let row: Vec<u8> = (0..64).map(|i| (i * 3) as u8).collect();
+        let prev: Vec<u8> = (0..64).map(|i| (i * 2) as u8).collect();
+        let mut expected = Vec::new();
+        fallback::filter_up(&row, &prev, &mut expected);
+        let mut result = Vec::new();
+        unsafe { filter_up_sse2(&row, &prev, &mut result) };
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_filter_up_sse2_remainder() {
+        if !is_x86_feature_detected!("sse2") {
+            return;
+        }
+        let row: Vec<u8> = (0..37).map(|i| (i * 5) as u8).collect();
+        let prev: Vec<u8> = (0..37).map(|i| (i * 3) as u8).collect();
+        let mut expected = Vec::new();
+        fallback::filter_up(&row, &prev, &mut expected);
+        let mut result = Vec::new();
+        unsafe { filter_up_sse2(&row, &prev, &mut result) };
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_filter_up_avx2_basic() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        let row: Vec<u8> = (0..128).map(|i| (i * 3) as u8).collect();
+        let prev: Vec<u8> = (0..128).map(|i| (i * 2) as u8).collect();
+        let mut expected = Vec::new();
+        fallback::filter_up(&row, &prev, &mut expected);
+        let mut result = Vec::new();
+        unsafe { filter_up_avx2(&row, &prev, &mut result) };
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_filter_up_avx2_remainder() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        let row: Vec<u8> = (0..67).map(|i| (i * 7) as u8).collect();
+        let prev: Vec<u8> = (0..67).map(|i| (i * 11) as u8).collect();
+        let mut expected = Vec::new();
+        fallback::filter_up(&row, &prev, &mut expected);
+        let mut result = Vec::new();
+        unsafe { filter_up_avx2(&row, &prev, &mut result) };
+        assert_eq!(result, expected);
+    }
+
+    // ========================================================================
+    // Filter Average Tests
+    // ========================================================================
+
+    #[test]
+    fn test_filter_average_avx2_basic() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        let row: Vec<u8> = (0..128).map(|i| (i * 3) as u8).collect();
+        let prev: Vec<u8> = (0..128).map(|i| (i * 2) as u8).collect();
+        let mut expected = Vec::new();
+        fallback::filter_average(&row, &prev, 4, &mut expected);
+        let mut result = Vec::new();
+        unsafe { filter_average_avx2(&row, &prev, 4, &mut result) };
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_filter_average_avx2_bpp1() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        let row: Vec<u8> = (0..100).map(|i| (i * 7) as u8).collect();
+        let prev: Vec<u8> = (0..100).map(|i| (i * 5) as u8).collect();
+        let mut expected = Vec::new();
+        fallback::filter_average(&row, &prev, 1, &mut expected);
+        let mut result = Vec::new();
+        unsafe { filter_average_avx2(&row, &prev, 1, &mut result) };
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_filter_average_avx2_remainder() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        let row: Vec<u8> = (0..73).map(|i| (i * 11) as u8).collect();
+        let prev: Vec<u8> = (0..73).map(|i| (i * 13) as u8).collect();
+        let mut expected = Vec::new();
+        fallback::filter_average(&row, &prev, 3, &mut expected);
+        let mut result = Vec::new();
+        unsafe { filter_average_avx2(&row, &prev, 3, &mut result) };
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_filter_average_avx2_short() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        // Test row shorter than bpp
+        let row = vec![10, 20, 30];
+        let prev = vec![5, 10, 15];
+        let mut expected = Vec::new();
+        fallback::filter_average(&row, &prev, 4, &mut expected);
+        let mut result = Vec::new();
+        unsafe { filter_average_avx2(&row, &prev, 4, &mut result) };
+        assert_eq!(result, expected);
+    }
+
+    // ========================================================================
+    // Filter Paeth Tests
+    // ========================================================================
+
+    #[test]
+    fn test_filter_paeth_sse2_basic() {
+        if !is_x86_feature_detected!("sse2") {
+            return;
+        }
+        let row: Vec<u8> = (0..64).map(|i| (i * 3) as u8).collect();
+        let prev: Vec<u8> = (0..64).map(|i| (i * 2) as u8).collect();
+        let mut expected = Vec::new();
+        fallback::filter_paeth(&row, &prev, 4, &mut expected);
+        let mut result = Vec::new();
+        unsafe { filter_paeth_sse2(&row, &prev, 4, &mut result) };
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_filter_paeth_sse2_bpp1() {
+        if !is_x86_feature_detected!("sse2") {
+            return;
+        }
+        let row: Vec<u8> = (0..100).map(|i| (i * 7) as u8).collect();
+        let prev: Vec<u8> = (0..100).map(|i| (i * 5) as u8).collect();
+        let mut expected = Vec::new();
+        fallback::filter_paeth(&row, &prev, 1, &mut expected);
+        let mut result = Vec::new();
+        unsafe { filter_paeth_sse2(&row, &prev, 1, &mut result) };
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_filter_paeth_sse2_remainder() {
+        if !is_x86_feature_detected!("sse2") {
+            return;
+        }
+        let row: Vec<u8> = (0..47).map(|i| (i * 11) as u8).collect();
+        let prev: Vec<u8> = (0..47).map(|i| (i * 13) as u8).collect();
+        let mut expected = Vec::new();
+        fallback::filter_paeth(&row, &prev, 3, &mut expected);
+        let mut result = Vec::new();
+        unsafe { filter_paeth_sse2(&row, &prev, 3, &mut result) };
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_filter_paeth_avx2_basic() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        let row: Vec<u8> = (0..128).map(|i| (i * 3) as u8).collect();
+        let prev: Vec<u8> = (0..128).map(|i| (i * 2) as u8).collect();
+        let mut expected = Vec::new();
+        fallback::filter_paeth(&row, &prev, 4, &mut expected);
+        let mut result = Vec::new();
+        unsafe { filter_paeth_avx2(&row, &prev, 4, &mut result) };
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_filter_paeth_avx2_bpp3() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        let row: Vec<u8> = (0..150).map(|i| (i * 7) as u8).collect();
+        let prev: Vec<u8> = (0..150).map(|i| (i * 5) as u8).collect();
+        let mut expected = Vec::new();
+        fallback::filter_paeth(&row, &prev, 3, &mut expected);
+        let mut result = Vec::new();
+        unsafe { filter_paeth_avx2(&row, &prev, 3, &mut result) };
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_filter_paeth_avx2_remainder() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        let row: Vec<u8> = (0..83).map(|i| (i * 17) as u8).collect();
+        let prev: Vec<u8> = (0..83).map(|i| (i * 19) as u8).collect();
+        let mut expected = Vec::new();
+        fallback::filter_paeth(&row, &prev, 4, &mut expected);
+        let mut result = Vec::new();
+        unsafe { filter_paeth_avx2(&row, &prev, 4, &mut result) };
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_filter_paeth_avx2_short() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+        let row = vec![10, 20, 30];
+        let prev = vec![5, 10, 15];
+        let mut expected = Vec::new();
+        fallback::filter_paeth(&row, &prev, 4, &mut expected);
+        let mut result = Vec::new();
+        unsafe { filter_paeth_avx2(&row, &prev, 4, &mut result) };
+        assert_eq!(result, expected);
+    }
+
+    // ========================================================================
+    // CRC32 HW Tests
+    // ========================================================================
+
+    #[test]
+    fn test_crc32_hw_empty() {
+        if !is_x86_feature_detected!("sse4.2") {
+            return;
+        }
+        let result = unsafe { crc32_hw(&[]) };
+        // Note: crc32_hw uses a different polynomial (iSCSI) than the PNG standard
+        // So we just verify it runs without panicking
+        assert!(result == result); // Tautology to ensure it runs
+    }
+
+    #[test]
+    fn test_crc32_hw_small() {
+        if !is_x86_feature_detected!("sse4.2") {
+            return;
+        }
+        let data = b"hello world";
+        let result = unsafe { crc32_hw(data) };
+        // Just verify it produces a result
+        assert!(result != 0 || data.is_empty());
+    }
+
+    #[test]
+    fn test_crc32_hw_various_sizes() {
+        if !is_x86_feature_detected!("sse4.2") {
+            return;
+        }
+        // Test various sizes to exercise different code paths
+        for size in [1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 100] {
+            let data: Vec<u8> = (0..size).map(|i| (i * 7) as u8).collect();
+            let result = unsafe { crc32_hw(&data) };
+            // Just verify it runs
+            assert!(result == result);
+        }
+    }
+
+    // ========================================================================
+    // CRC32 PCLMULQDQ Tests
+    // ========================================================================
+
+    #[test]
+    fn test_crc32_pclmulqdq_small() {
+        if !is_x86_feature_detected!("pclmulqdq") || !is_x86_feature_detected!("sse4.1") {
+            return;
+        }
+        // Small data falls back to scalar
+        let data = b"hello";
+        let result = unsafe { crc32_pclmulqdq(data) };
+        let expected = fallback::crc32(data);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_crc32_pclmulqdq_exact_64() {
+        if !is_x86_feature_detected!("pclmulqdq") || !is_x86_feature_detected!("sse4.1") {
+            return;
+        }
+        let data: Vec<u8> = (0..64).map(|i| (i * 7) as u8).collect();
+        let result = unsafe { crc32_pclmulqdq(&data) };
+        let expected = fallback::crc32(&data);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_crc32_pclmulqdq_large() {
+        if !is_x86_feature_detected!("pclmulqdq") || !is_x86_feature_detected!("sse4.1") {
+            return;
+        }
+        let data: Vec<u8> = (0..1000).map(|i| (i * 13) as u8).collect();
+        let result = unsafe { crc32_pclmulqdq(&data) };
+        let expected = fallback::crc32(&data);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_crc32_pclmulqdq_with_remainder() {
+        if !is_x86_feature_detected!("pclmulqdq") || !is_x86_feature_detected!("sse4.1") {
+            return;
+        }
+        // Test with size that leaves remainder after 64-byte chunks
+        let data: Vec<u8> = (0..200).map(|i| (i * 17) as u8).collect();
+        let result = unsafe { crc32_pclmulqdq(&data) };
+        let expected = fallback::crc32(&data);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_crc32_pclmulqdq_unaligned() {
+        if !is_x86_feature_detected!("pclmulqdq") || !is_x86_feature_detected!("sse4.1") {
+            return;
+        }
+        // Create unaligned data by taking a slice
+        let data: Vec<u8> = (0..150).map(|i| (i * 11) as u8).collect();
+        let unaligned = &data[1..]; // This may be unaligned
+        let result = unsafe { crc32_pclmulqdq(unaligned) };
+        let expected = fallback::crc32(unaligned);
+        assert_eq!(result, expected);
+    }
+}

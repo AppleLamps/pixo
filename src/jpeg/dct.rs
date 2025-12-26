@@ -752,4 +752,259 @@ mod tests {
         // DC should be quantized to a non-zero value
         assert!(quantized[0] != 0, "DC was quantized to zero");
     }
+
+    // ==========================================================================
+    // Extended DCT Tests for Coverage
+    // ==========================================================================
+
+    #[test]
+    fn test_dct_2d_fast_matches_integer() {
+        // dct_2d_fast should call dct_2d_integer on non-aarch64
+        let mut block = [0i16; 64];
+        for i in 0..64 {
+            block[i] = ((i as i32 * 7) % 256 - 128) as i16;
+        }
+
+        let fast_result = dct_2d_fast(&block);
+        let int_result = dct_2d_integer(&block);
+
+        // On non-aarch64, these should be identical
+        #[cfg(not(target_arch = "aarch64"))]
+        {
+            assert_eq!(fast_result, int_result);
+        }
+
+        // On aarch64, just verify it produces reasonable output
+        #[cfg(target_arch = "aarch64")]
+        {
+            // Both should have similar DC coefficients
+            assert!(
+                (fast_result[0] - int_result[0]).abs() < 5,
+                "DC mismatch: {} vs {}",
+                fast_result[0],
+                int_result[0]
+            );
+        }
+    }
+
+    #[test]
+    fn test_quantize_block_integer_negative_values() {
+        // Test quantization with negative DCT coefficients
+        let mut dct = [0i32; 64];
+        dct[0] = 100;
+        dct[1] = -50;
+        dct[2] = 75;
+        dct[3] = -25;
+
+        let quant = [16u16; 64];
+        let quantized = quantize_block_integer(&dct, &quant);
+
+        // Positive: (100 + 8) / 16 = 6
+        assert_eq!(quantized[0], 6);
+        // Negative: (-50 - 8) / 16 = -3
+        assert_eq!(quantized[1], -3);
+        // Positive: (75 + 8) / 16 = 5
+        assert_eq!(quantized[2], 5);
+        // Negative: (-25 - 8) / 16 = -2
+        assert_eq!(quantized[3], -2);
+    }
+
+    #[test]
+    fn test_quantize_block_integer_various_quant_tables() {
+        let dct = [100i32; 64];
+
+        // Test with different quantization values
+        let quant_low = [8u16; 64];
+        let quant_high = [64u16; 64];
+
+        let q_low = quantize_block_integer(&dct, &quant_low);
+        let q_high = quantize_block_integer(&dct, &quant_high);
+
+        // Lower quantizer = larger quantized value
+        assert!(q_low[0] > q_high[0]);
+        assert_eq!(q_low[0], (100 + 4) / 8); // 13
+        assert_eq!(q_high[0], (100 + 32) / 64); // 2
+    }
+
+    #[test]
+    fn test_quantize_block_integer_edge_values() {
+        let mut dct = [0i32; 64];
+        // Test with values that round exactly
+        dct[0] = 16; // Should round to 1 with quant=16
+        dct[1] = 8; // Edge case: exactly half
+        dct[2] = 7; // Just under half
+
+        let quant = [16u16; 64];
+        let quantized = quantize_block_integer(&dct, &quant);
+
+        // (16 + 8) / 16 = 1
+        assert_eq!(quantized[0], 1);
+        // (8 + 8) / 16 = 1
+        assert_eq!(quantized[1], 1);
+        // (7 + 8) / 16 = 0
+        assert_eq!(quantized[2], 0);
+    }
+
+    #[test]
+    fn test_integer_dct_checkerboard() {
+        // Checkerboard pattern should produce high-frequency components
+        let mut block = [0i16; 64];
+        for row in 0..8 {
+            for col in 0..8 {
+                block[row * 8 + col] = if (row + col) % 2 == 0 { 100 } else { -100 };
+            }
+        }
+
+        let result = dct_2d_integer(&block);
+
+        // Checkerboard has high frequency content, so AC components should be significant
+        // The (7,7) frequency component should be largest for perfect checkerboard
+        let ac_energy: i64 = result[1..].iter().map(|&x| (x as i64).pow(2)).sum();
+        assert!(ac_energy > 0, "Checkerboard should have AC energy");
+    }
+
+    #[test]
+    fn test_integer_dct_horizontal_stripes() {
+        // Horizontal stripes pattern
+        let mut block = [0i16; 64];
+        for row in 0..8 {
+            let val = if row % 2 == 0 { 100i16 } else { -100 };
+            for col in 0..8 {
+                block[row * 8 + col] = val;
+            }
+        }
+
+        let result = dct_2d_integer(&block);
+
+        // DC should be near zero (equal amounts of +100 and -100)
+        assert!(result[0].abs() < 10, "DC should be small: {}", result[0]);
+    }
+
+    #[test]
+    fn test_integer_dct_vertical_stripes() {
+        // Vertical stripes pattern
+        let mut block = [0i16; 64];
+        for row in 0..8 {
+            for col in 0..8 {
+                block[row * 8 + col] = if col % 2 == 0 { 100 } else { -100 };
+            }
+        }
+
+        let result = dct_2d_integer(&block);
+
+        // DC should be near zero
+        assert!(result[0].abs() < 10, "DC should be small: {}", result[0]);
+    }
+
+    #[test]
+    fn test_integer_dct_extreme_values() {
+        // Test with maximum positive values
+        let block_max = [127i16; 64];
+        let result_max = dct_2d_integer(&block_max);
+        assert!(
+            result_max[0] > 0,
+            "DC should be positive for positive block"
+        );
+
+        // Test with maximum negative values
+        let block_min = [-128i16; 64];
+        let result_min = dct_2d_integer(&block_min);
+        assert!(
+            result_min[0] < 0,
+            "DC should be negative for negative block"
+        );
+    }
+
+    #[test]
+    fn test_float_dct_gradient() {
+        // Test float DCT with a gradient
+        let mut block = [0.0f32; 64];
+        for row in 0..8 {
+            for col in 0..8 {
+                block[row * 8 + col] = (row + col) as f32 * 10.0;
+            }
+        }
+
+        let result = dct_2d(&block);
+
+        // DC should capture the average (sum / 64)
+        let _avg: f32 = block.iter().sum::<f32>() / 64.0;
+        // DC coefficient is scaled, so just verify it's proportional
+        assert!(result[0] > 0.0, "DC should be positive");
+    }
+
+    #[test]
+    fn test_float_dct_single_pixel() {
+        // Only one non-zero pixel
+        let mut block = [0.0f32; 64];
+        block[0] = 100.0;
+
+        let result = dct_2d(&block);
+
+        // Should have energy spread across frequencies
+        let total_energy: f32 = result.iter().map(|&x| x * x).sum();
+        assert!(total_energy > 0.0, "Should have energy");
+    }
+
+    #[test]
+    fn test_idct_2d_dc_only() {
+        // IDCT of a block with only DC coefficient
+        let mut block = [0.0f32; 64];
+        block[0] = 100.0;
+
+        let result = idct_2d(&block);
+
+        // All pixels should be approximately equal (DC spreads evenly)
+        let avg = result.iter().sum::<f32>() / 64.0;
+        for &val in &result {
+            assert!(
+                (val - avg).abs() < 1.0,
+                "DC-only IDCT should produce uniform values"
+            );
+        }
+    }
+
+    #[test]
+    fn test_cos_table_symmetry() {
+        // Verify cos table has expected symmetry properties
+        for i in 0..8 {
+            // cos(0) for any row should be 1
+            assert!(
+                (COS_TABLE[i][0] - 1.0).abs() < 0.01,
+                "COS_TABLE[{i}][0] should be ~1.0"
+            );
+        }
+    }
+
+    #[test]
+    fn test_alpha_values() {
+        // First element should be 1/sqrt(2)
+        assert!((ALPHA[0] - FRAC_1_SQRT_2).abs() < 0.0001);
+        // All other elements should be 1.0
+        for &a in &ALPHA[1..] {
+            assert!((a - 1.0).abs() < 0.0001);
+        }
+    }
+
+    #[test]
+    fn test_aan_scale_factors() {
+        // Verify S array has positive values
+        for &s in &S {
+            assert!(s > 0.0, "Scale factor should be positive");
+            assert!(s < 2.0, "Scale factor should be less than 2");
+        }
+    }
+
+    #[test]
+    fn test_fix_mul_basic() {
+        // Test the fixed-point multiplication helper
+        let result = fix_mul(8192, 8192); // Both are 1.0 in 13-bit fixed point
+        assert_eq!(result, 8192); // 1.0 * 1.0 = 1.0
+
+        let result = fix_mul(16384, 8192); // 2.0 * 1.0
+        assert_eq!(result, 16384); // = 2.0
+
+        let result = fix_mul(8192, 4096); // 1.0 * 0.5
+        assert_eq!(result, 4096); // = 0.5
+    }
 }

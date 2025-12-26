@@ -1705,4 +1705,205 @@ mod tests {
         assert!(!opts.progressive);
         assert!(!opts.trellis_quant);
     }
+
+    // ==========================================================================
+    // Extended JPEG Tests for Coverage
+    // ==========================================================================
+
+    #[test]
+    fn test_encode_progressive() {
+        let pixels = vec![128u8; 16 * 16 * 3];
+        let opts = JpegOptions {
+            quality: 85,
+            subsampling: Subsampling::S420,
+            optimize_huffman: false,
+            progressive: true,
+            trellis_quant: false,
+            restart_interval: None,
+        };
+        let mut output = Vec::new();
+        encode_with_options_into(&mut output, &pixels, 16, 16, ColorType::Rgb, &opts).unwrap();
+
+        // Should have valid JPEG structure
+        assert_eq!(&output[0..2], &SOI.to_be_bytes());
+        assert_eq!(&output[output.len() - 2..], &EOI.to_be_bytes());
+    }
+
+    #[test]
+    fn test_encode_progressive_with_trellis() {
+        let pixels: Vec<u8> = (0..16 * 16 * 3).map(|i| (i * 7 % 256) as u8).collect();
+        let opts = JpegOptions::max(85);
+        let mut output = Vec::new();
+        encode_with_options_into(&mut output, &pixels, 16, 16, ColorType::Rgb, &opts).unwrap();
+
+        assert_eq!(&output[0..2], &SOI.to_be_bytes());
+    }
+
+    #[test]
+    fn test_encode_with_restart_interval() {
+        let pixels = vec![100u8; 32 * 32 * 3];
+        let opts = JpegOptions {
+            quality: 80,
+            subsampling: Subsampling::S444,
+            optimize_huffman: false,
+            progressive: false,
+            trellis_quant: false,
+            restart_interval: Some(10),
+        };
+        let mut output = Vec::new();
+        encode_with_options_into(&mut output, &pixels, 32, 32, ColorType::Rgb, &opts).unwrap();
+
+        assert_eq!(&output[0..2], &SOI.to_be_bytes());
+    }
+
+    #[test]
+    fn test_encode_various_subsampling() {
+        let pixels = vec![128u8; 16 * 16 * 3];
+
+        for subsampling in [Subsampling::S444, Subsampling::S420] {
+            let opts = JpegOptions {
+                quality: 85,
+                subsampling,
+                optimize_huffman: false,
+                progressive: false,
+                trellis_quant: false,
+                restart_interval: None,
+            };
+            let mut output = Vec::new();
+            encode_with_options_into(&mut output, &pixels, 16, 16, ColorType::Rgb, &opts).unwrap();
+            assert_eq!(&output[0..2], &SOI.to_be_bytes());
+        }
+    }
+
+    #[test]
+    fn test_encode_with_optimized_huffman() {
+        let pixels: Vec<u8> = (0..16 * 16 * 3).map(|i| (i * 13 % 256) as u8).collect();
+        let opts = JpegOptions::balanced(85);
+        let mut output = Vec::new();
+        encode_with_options_into(&mut output, &pixels, 16, 16, ColorType::Rgb, &opts).unwrap();
+
+        assert_eq!(&output[0..2], &SOI.to_be_bytes());
+    }
+
+    #[test]
+    fn test_encode_rgba_unsupported() {
+        let pixels = vec![128u8; 8 * 8 * 4]; // RGBA
+        let result = encode_with_color(&pixels, 8, 8, 85, ColorType::Rgba);
+        assert!(matches!(result, Err(Error::UnsupportedColorType)));
+    }
+
+    #[test]
+    fn test_encode_gray_alpha_unsupported() {
+        let pixels = vec![128u8; 8 * 8 * 2]; // GrayAlpha
+        let result = encode_with_color(&pixels, 8, 8, 85, ColorType::GrayAlpha);
+        assert!(matches!(result, Err(Error::UnsupportedColorType)));
+    }
+
+    #[test]
+    fn test_encode_various_quality_levels() {
+        let pixels = vec![128u8; 8 * 8 * 3];
+
+        for quality in [1, 25, 50, 75, 100] {
+            let jpeg = encode(&pixels, 8, 8, quality).unwrap();
+            assert_eq!(&jpeg[0..2], &SOI.to_be_bytes());
+            assert_eq!(&jpeg[jpeg.len() - 2..], &EOI.to_be_bytes());
+        }
+    }
+
+    #[test]
+    fn test_encode_non_multiple_of_8_dimensions() {
+        // Dimensions that require padding
+        let widths = [5, 7, 9, 15, 17];
+        let heights = [3, 6, 11, 13, 19];
+
+        for &w in &widths {
+            for &h in &heights {
+                let pixels = vec![100u8; (w * h * 3) as usize];
+                let jpeg = encode(&pixels, w, h, 85).unwrap();
+                assert_eq!(&jpeg[0..2], &SOI.to_be_bytes());
+            }
+        }
+    }
+
+    #[test]
+    fn test_jpeg_options_fast() {
+        let opts = JpegOptions::fast(75);
+        assert_eq!(opts.quality, 75);
+        assert_eq!(opts.subsampling, Subsampling::S444);
+        assert!(!opts.optimize_huffman);
+        assert!(!opts.progressive);
+        assert!(!opts.trellis_quant);
+    }
+
+    #[test]
+    fn test_jpeg_options_balanced() {
+        let opts = JpegOptions::balanced(80);
+        assert_eq!(opts.quality, 80);
+        assert_eq!(opts.subsampling, Subsampling::S444);
+        assert!(opts.optimize_huffman);
+        assert!(!opts.progressive);
+        assert!(!opts.trellis_quant);
+    }
+
+    #[test]
+    fn test_jpeg_options_max() {
+        let opts = JpegOptions::max(90);
+        assert_eq!(opts.quality, 90);
+        assert_eq!(opts.subsampling, Subsampling::S420);
+        assert!(opts.optimize_huffman);
+        assert!(opts.progressive);
+        assert!(opts.trellis_quant);
+    }
+
+    #[test]
+    fn test_jpeg_options_from_preset() {
+        // from_preset(quality, preset)
+        let fast = JpegOptions::from_preset(70, 0);
+        assert_eq!(fast.quality, 70);
+        assert!(!fast.progressive);
+
+        let balanced = JpegOptions::from_preset(80, 1);
+        assert_eq!(balanced.quality, 80);
+        assert!(balanced.optimize_huffman);
+
+        let max = JpegOptions::from_preset(90, 2);
+        assert_eq!(max.quality, 90);
+        assert!(max.progressive);
+    }
+
+    #[test]
+    fn test_jpeg_options_builder_all_options() {
+        let opts = JpegOptions::builder()
+            .quality(95)
+            .subsampling(Subsampling::S444)
+            .optimize_huffman(true)
+            .progressive(true)
+            .trellis_quant(true)
+            .restart_interval(Some(8))
+            .build();
+
+        assert_eq!(opts.quality, 95);
+        assert_eq!(opts.subsampling, Subsampling::S444);
+        assert!(opts.optimize_huffman);
+        assert!(opts.progressive);
+        assert!(opts.trellis_quant);
+        assert_eq!(opts.restart_interval, Some(8));
+    }
+
+    #[test]
+    fn test_encode_image_too_large() {
+        // Test that very large dimensions are rejected
+        let width = (1 << 24) + 1;
+        let height = 1;
+        let err = encode(&[], width, height, 85).unwrap_err();
+        assert!(matches!(err, Error::ImageTooLarge { .. }));
+    }
+
+    #[test]
+    fn test_encode_invalid_data_length() {
+        // Wrong number of bytes for dimensions
+        let pixels = vec![0u8; 10]; // Not enough for 4x4 RGB
+        let err = encode(&pixels, 4, 4, 85).unwrap_err();
+        assert!(matches!(err, Error::InvalidDataLength { .. }));
+    }
 }

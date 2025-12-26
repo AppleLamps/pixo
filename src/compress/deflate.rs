@@ -443,9 +443,7 @@ fn count_symbols(tokens: &[Token]) -> ([u32; 286], [u32; 30]) {
             Token::Match { length, distance } => {
                 debug_assert!(
                     (1..=MAX_DISTANCE as u16).contains(&distance),
-                    "bad distance {} at token {}",
-                    distance,
-                    i
+                    "bad distance {distance} at token {i}"
                 );
                 let (len_symbol, _, _) = length_code(length);
                 lit_len_counts[len_symbol as usize] += 1;

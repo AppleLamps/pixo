@@ -125,7 +125,7 @@ All libraries tested at **compression level 6** on 1 MB payloads.
 | Library      | Output Size | Time   | Notes                              |
 | ------------ | ----------- | ------ | ---------------------------------- |
 | pixo (lvl 9) | 146 B       | 91 µs  | Fast, good compression             |
-| **zopfli**   | 189 B       | 222 ms | Best compression, **2400× slower** |
+| **zopfli**   | 144 B       | 222 ms | Best compression, **2400× slower** |
 
 **Key Findings:**
 
@@ -140,13 +140,13 @@ All libraries tested at **compression level 6** on 1 MB payloads.
 
 Comparing pixo presets against oxipng and the image crate. All columns show **size / time**.
 
-| Image                       | Dimensions | pixo Fast        | pixo Balanced    | pixo Max        | oxipng           | image crate     | Delta vs oxipng    |
-| --------------------------- | ---------- | ---------------- | ---------------- | --------------- | ---------------- | --------------- | ------------------ |
-| Gradient (512×512)          | 512×512    | 10.9 KB / 1.7ms  | 10.1 KB / 4.6ms  | 5.0 KB / 23.0s  | 4.3 KB / 112ms   | 76.8 KB / 0.7ms | +134.7% (Balanced) |
-| playground.png              | 1460×1080  | 1,475,576 / 0.4s | 1,340,919 / 0.2s | 1,332,458 / 77s | 1,134,213 / 2.1s | ~1.4MB / 0.3s   | +17.5%             |
-| squoosh_example.png         | 1460×1280  | 2,366,900 / 0.2s | 1,928,383 / 0.4s | 1,859,691 / 41s | 1,633,408 / 1.8s | ~2.0MB / 0.4s   | +13.9%             |
-| squoosh_example_palette.png | 800×600    | 268,636 / 48ms   | 147,626 / 45ms   | 144,855 / 2.8s  | 104,206 / 0.9s   | ~180KB / 50ms   | +39.0%             |
-| rocket.png                  | 800×600    | 1,716,340 / 0.1s | 1,390,853 / 0.2s | 1,379,515 / 15s | 1,280,518 / 1.2s | ~1.5MB / 0.2s   | +7.7%              |
+| Image                       | Dimensions | pixo Fast       | pixo Balanced   | pixo Max        | oxipng          | image crate     | Delta vs oxipng    |
+| --------------------------- | ---------- | --------------- | --------------- | --------------- | --------------- | --------------- | ------------------ |
+| Gradient (512×512)          | 512×512    | 10.9 KB / 1.7ms | 10.1 KB / 4.6ms | 5.0 KB / 23.0s  | 4.3 KB / 112ms  | 76.8 KB / 0.7ms | +134.7% (Balanced) |
+| playground.png              | 1460×1080  | 1.41 MB / 0.4s  | 1.28 MB / 0.2s  | 1.27 MB / 77s   | 1.08 MB / 2.1s  | ~1.4 MB / 0.3s  | +17.5%             |
+| squoosh_example.png         | 1460×1280  | 2.26 MB / 0.2s  | 1.84 MB / 0.4s  | 1.77 MB / 41s   | 1.56 MB / 1.8s  | ~2.0 MB / 0.4s  | +13.9%             |
+| squoosh_example_palette.png | 800×600    | 262 KB / 48ms   | 144 KB / 45ms   | 141 KB / 2.8s   | 102 KB / 0.9s   | ~180 KB / 50ms  | +39.0%             |
+| rocket.png                  | 800×600    | 1.64 MB / 0.1s  | 1.33 MB / 0.2s  | 1.32 MB / 15s   | 1.22 MB / 1.2s  | ~1.5 MB / 0.2s  | +7.7%              |
 
 ### PNG Preset Summary
 

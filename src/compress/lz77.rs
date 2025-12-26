@@ -1458,8 +1458,7 @@ mod tests {
         // Should be None since there's no valid match
         assert!(
             result.is_none() || result.unwrap().1 > 0,
-            "find_best_match returned invalid match with distance 0: {:?}",
-            result
+            "find_best_match returned invalid match with distance 0: {result:?}"
         );
     }
 
@@ -1489,8 +1488,7 @@ mod tests {
         let result = compressor.find_best_match(data, 8, 100, 258, 5);
         assert!(
             result.is_none(),
-            "find_best_match returned {:?} when no match >= min_match_length exists",
-            result
+            "find_best_match returned {result:?} when no match >= min_match_length exists"
         );
 
         // With min_match_length = 4, we should get a valid match
@@ -1523,8 +1521,7 @@ mod tests {
         let result = compressor.find_best_match_ht(data, 8, 258, 5);
         assert!(
             result.is_none(),
-            "find_best_match_ht returned {:?} when no match >= min_match_length exists",
-            result
+            "find_best_match_ht returned {result:?} when no match >= min_match_length exists"
         );
 
         // With min_match_length = 4, we should get a valid match
@@ -1560,16 +1557,11 @@ mod tests {
             if let Some((len, dist)) = result {
                 assert!(
                     dist > 0,
-                    "find_best_match returned zero distance: len={}, dist={}, min_len={}",
-                    len,
-                    dist,
-                    min_len
+                    "find_best_match returned zero distance: len={len}, dist={dist}, min_len={min_len}"
                 );
                 assert!(
                     len >= min_len,
-                    "find_best_match returned length {} < min_match_length {}",
-                    len,
-                    min_len
+                    "find_best_match returned length {len} < min_match_length {min_len}"
                 );
             }
         }
