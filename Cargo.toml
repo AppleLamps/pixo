@@ -5,6 +5,9 @@ edition = "2021"
 description = "A minimal-dependency, high-performance image compression library"
 license = "MIT"
 readme = "README.md"
+repository = "https://github.com/leerob/pixo"
+homepage = "https://pixo.leerob.com"
+documentation = "https://docs.rs/pixo"
 keywords = ["image", "compression", "png", "jpeg", "encoding"]
 categories = ["compression", "encoding", "multimedia::images"]
 
