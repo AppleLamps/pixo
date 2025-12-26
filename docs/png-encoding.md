@@ -10,7 +10,7 @@ With PNG compression, that same screenshot might be just 200-400 KB — a **15-3
 
 ## The Core Insight
 
-PNG uses **predictive filtering** before compression. Instead of storing raw pixel values, it stores the *difference* between each pixel and a predicted value based on its neighbors.
+PNG uses **predictive filtering** before compression. Instead of storing raw pixel values, it stores the _difference_ between each pixel and a predicted value based on its neighbors.
 
 Why does this help? Consider these two sequences:
 
@@ -165,11 +165,11 @@ The Sub filter wins here because this is a **horizontal gradient** — values in
 
 The filtered output has **lower entropy** than the raw data:
 
-| Metric | Raw Values | Sub-Filtered |
-|--------|-----------|--------------|
-| Unique values | 8 | 2 |
-| Range | 100-114 | 2-100 |
-| Repeated values | 0 | 7 identical "2"s |
+| Metric          | Raw Values | Sub-Filtered     |
+| --------------- | ---------- | ---------------- |
+| Unique values   | 8          | 2                |
+| Range           | 100-114    | 2-100            |
+| Repeated values | 0          | 7 identical "2"s |
 
 DEFLATE's LZ77 stage finds the repeated "2" values and encodes them as back-references. Huffman coding then assigns short codes to the common value "2".
 
@@ -203,6 +203,7 @@ fn score(filtered: &[u8]) -> u64 {
 ```
 
 Lower scores typically compress better because:
+
 - Values near zero dominate
 - Fewer unique values appear
 - Run-length encoding becomes more effective
@@ -211,16 +212,16 @@ Lower scores typically compress better because:
 
 Our library provides several strategies:
 
-| Strategy | Description | Speed | Compression |
-|----------|-------------|-------|-------------|
-| `None` | Always use filter 0 | Fastest | Poor |
-| `Sub` | Always use filter 1 | Fast | Moderate |
-| `Up` | Always use filter 2 | Fast | Moderate |
-| `Average` | Always use filter 3 | Fast | Moderate |
-| `Paeth` | Always use filter 4 | Fast | Good |
-| `MinSum` | Try all 5, pick lowest score | Medium | Very Good |
-| `AdaptiveFast` | Try Sub/Up/Paeth with early exit | Medium | Good |
-| `Adaptive` | Try all 5 per row | Slow | Best |
+| Strategy       | Description                      | Speed   | Compression |
+| -------------- | -------------------------------- | ------- | ----------- |
+| `None`         | Always use filter 0              | Fastest | Poor        |
+| `Sub`          | Always use filter 1              | Fast    | Moderate    |
+| `Up`           | Always use filter 2              | Fast    | Moderate    |
+| `Average`      | Always use filter 3              | Fast    | Moderate    |
+| `Paeth`        | Always use filter 4              | Fast    | Good        |
+| `MinSum`       | Try all 5, pick lowest score     | Medium  | Very Good   |
+| `AdaptiveFast` | Try Sub/Up/Paeth with early exit | Medium  | Good        |
+| `Adaptive`     | Try all 5 per row                | Slow    | Best        |
 
 ```rust
 use pixo::png::{PngOptions, FilterStrategy};
@@ -274,7 +275,7 @@ Beyond filtering, PNG encoders can apply lossless transformations. (When lossy o
 
 ### Palette Reduction
 
-Images with ≤256 unique colors become **indexed color** with a PLTE chunk:
+Images with ≤256 unique colors become **indexed color** with a PLTE chunk. A **palette** is a table of colors; each pixel stores a small index into that table.
 
 ```text
 Before: 24 bits/pixel (RGB)
@@ -377,11 +378,11 @@ Photo as PNG:        2.5 MB  ← 16x larger!
 
 Using a fixed filter on varied content wastes compression:
 
-| Content | Best Filter | Wrong Choice Penalty |
-|---------|-------------|---------------------|
-| Horizontal stripes | Sub | Up gives 0% compression |
-| Vertical stripes | Up | Sub gives 0% compression |
-| Photos/textures | Adaptive | Fixed filter loses 10-30% |
+| Content            | Best Filter | Wrong Choice Penalty      |
+| ------------------ | ----------- | ------------------------- |
+| Horizontal stripes | Sub         | Up gives 0% compression   |
+| Vertical stripes   | Up          | Sub gives 0% compression  |
+| Photos/textures    | Adaptive    | Fixed filter loses 10-30% |
 
 ### 3. Over-Optimizing Small Images
 

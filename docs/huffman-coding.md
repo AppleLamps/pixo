@@ -10,7 +10,7 @@ Huffman coding takes this principle to its mathematical optimum.
 
 ## The Problem
 
-Given a set of symbols and their frequencies, find a binary encoding that minimizes the total number of bits needed.
+Given a set of **symbols** (the things you want to encode, like bytes) and their **frequencies** (how often they appear), find a binary encoding that minimizes the total number of bits needed.
 
 ### Example: A Simple Message
 
@@ -40,7 +40,7 @@ That's a **12.5% savings** just by using smarter codes!
 
 ## The Prefix-Free Property
 
-There's a critical constraint: the codes must be **prefix-free** (no code is a prefix of another code).
+There's a critical constraint: the codes must be **prefix-free** (no code is a prefix of another code). This guarantees that decoding is unambiguous.
 
 Why? Consider what happens without this property:
 

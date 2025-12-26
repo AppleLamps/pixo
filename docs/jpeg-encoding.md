@@ -49,7 +49,7 @@ Each stage has a specific purpose (baseline 4:4:4 by default in this library; op
 
 ## Stage 1: Color Space Conversion
 
-JPEG converts RGB to **YCbCr**:
+JPEG converts RGB to **YCbCr** (separating **luma**/brightness from **chroma**/color):
 
 - **Y**: Luminance (brightness)
 - **Cb**: Blue chrominance (blue - luminance)
@@ -85,7 +85,7 @@ Notice the weights: green contributes 58.7% to brightness because human eyes hav
 
 ## Stage 2: Block Processing
 
-JPEG processes the image in **8×8 blocks**. Each block is transformed independently.
+JPEG processes the image in **8×8 blocks**. A block is a fixed-size tile of pixels processed independently.
 
 ```text
 Image divided into 8×8 blocks:
@@ -99,6 +99,7 @@ Image divided into 8×8 blocks:
 ```
 
 **Why 8×8?** This size is a sweet spot:
+
 - Small enough that pixels within a block are correlated (similar colors)
 - Large enough that the DCT produces useful frequency separation
 - Matches CPU cache lines for efficient processing
@@ -209,6 +210,7 @@ Read order:
 ```
 
 **Why zigzag?** After quantization, most non-zero values cluster in the top-left (low frequencies), while the bottom-right (high frequencies) is mostly zeros. Zigzag ordering:
+
 - Reads non-zero values first
 - Groups zeros together at the end
 - Enables efficient run-length encoding ("15 zeros, then -2, then EOB")
@@ -225,7 +227,7 @@ pub const ZIGZAG: [usize; 64] = [
 
 ## Stage 6: DC Coefficient Encoding (DPCM)
 
-DC coefficients (the average brightness of each block) change slowly between adjacent blocks. We encode the **difference** from the previous block (Differential Pulse Code Modulation):
+DC coefficients (the average brightness of each block) change slowly between adjacent blocks. We encode the **difference** from the previous block using DPCM (Differential Pulse Code Modulation):
 
 ```text
 Block DCs:   512,  515,  513,  516,  514
@@ -253,7 +255,7 @@ pub fn encode_block(..., prev_dc: i16, ...) -> i16 {
 
 ## Stage 7: AC Coefficient Encoding (Run-Length)
 
-AC coefficients are encoded as (run, value) pairs:
+AC coefficients are encoded as (run, value) pairs. **Run-length encoding (RLE)** stores “how many zeros” followed by the next non-zero value.
 
 - **Run**: Number of zeros before this value
 - **Value**: The non-zero coefficient
@@ -444,7 +446,7 @@ Original (red|blue):            After JPEG with 4:2:0:
 ### Quality vs. Artifact Severity
 
 | Quality | Blocking | Mosquito | Color Bleed | File Size |
-|---------|----------|----------|-------------|-----------|
+| ------- | -------- | -------- | ----------- | --------- |
 | 95-100  | None     | None     | Minimal     | Large     |
 | 80-90   | Minimal  | Minimal  | Slight      | Medium    |
 | 50-70   | Visible  | Moderate | Noticeable  | Small     |
@@ -480,12 +482,12 @@ Even at quality 100, JPEG still quantizes (with small divisors). For truly lossl
 
 ### 4. Wrong Quality for the Use Case
 
-| Use Case | Recommended Quality | Why |
-|----------|---------------------|-----|
-| Archival | 92-95 | Preserve detail, still save space |
-| Web display | 80-85 | Good balance of quality/size |
-| Thumbnails | 60-75 | Small size matters more |
-| Preview/draft | 40-60 | Speed and size over quality |
+| Use Case      | Recommended Quality | Why                               |
+| ------------- | ------------------- | --------------------------------- |
+| Archival      | 92-95               | Preserve detail, still save space |
+| Web display   | 80-85               | Good balance of quality/size      |
+| Thumbnails    | 60-75               | Small size matters more           |
+| Preview/draft | 40-60               | Speed and size over quality       |
 
 ### 5. Ignoring Chroma Subsampling
 
@@ -493,7 +495,7 @@ Default 4:4:4 subsampling preserves color detail but increases file size. For ph
 
 ```text
 4:4:4: Full color resolution (larger file)
-4:2:0: Half color resolution (smaller file, usually fine for photos)
+4:2:0: Half color resolution in both directions (smaller file, usually fine for photos)
 ```
 
 ## Summary
