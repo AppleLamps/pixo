@@ -213,10 +213,11 @@ fn descale_and_clamp(val: i32) -> u8 {
 /// 64 dequantized coefficients in natural (row-major) order
 pub fn dequantize(coeffs: &[i16; 64], qtable: &[u16; 64]) -> [i32; 64] {
     /// Zigzag to natural order mapping.
+    /// This must match the encoder's ZIGZAG table from src/jpeg/quantize.rs.
     const UNZIGZAG: [usize; 64] = [
-        0, 1, 5, 6, 14, 15, 27, 28, 2, 4, 7, 13, 16, 26, 29, 42, 3, 8, 12, 17, 25, 30, 41, 43, 9,
-        11, 18, 24, 31, 40, 44, 53, 10, 19, 23, 32, 39, 45, 52, 54, 20, 22, 33, 38, 46, 51, 55, 60,
-        21, 34, 37, 47, 50, 56, 59, 61, 35, 36, 48, 49, 57, 58, 62, 63,
+        0, 1, 8, 16, 9, 2, 3, 10, 17, 24, 32, 25, 18, 11, 4, 5, 12, 19, 26, 33, 40, 48, 41, 34, 27,
+        20, 13, 6, 7, 14, 21, 28, 35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37, 44, 51,
+        58, 59, 52, 45, 38, 31, 39, 46, 53, 60, 61, 54, 47, 55, 62, 63,
     ];
 
     let mut result = [0i32; 64];
@@ -252,11 +253,7 @@ mod tests {
 
         // All pixels should be above 128 (DC adds brightness)
         for &pixel in &output {
-            assert!(
-                pixel > 128 || pixel == 255,
-                "pixel {} should be > 128",
-                pixel
-            );
+            assert!(pixel > 128 || pixel == 255, "pixel {pixel} should be > 128");
         }
     }
 
@@ -269,7 +266,7 @@ mod tests {
 
         // All pixels should be below 128
         for &pixel in &output {
-            assert!(pixel < 128 || pixel == 0, "pixel {} should be < 128", pixel);
+            assert!(pixel < 128 || pixel == 0, "pixel {pixel} should be < 128");
         }
     }
 
@@ -377,5 +374,42 @@ mod tests {
                 "all pixels should be equal with DC-only input"
             );
         }
+    }
+
+    #[test]
+    fn test_unzigzag_matches_encoder_zigzag() {
+        // The UNZIGZAG table inside dequantize must match the encoder's ZIGZAG.
+        // We verify by checking that specific zigzag positions map to correct natural positions.
+        // Standard JPEG zigzag order for first 10 positions:
+        //   zigzag 0 -> natural 0  (DC)
+        //   zigzag 1 -> natural 1
+        //   zigzag 2 -> natural 8  (second row)
+        //   zigzag 3 -> natural 16 (third row)
+        //   zigzag 4 -> natural 9
+        //   zigzag 5 -> natural 2
+        //   zigzag 6 -> natural 3
+        //   zigzag 7 -> natural 10
+        //   zigzag 8 -> natural 17
+        //   zigzag 9 -> natural 24
+
+        let qtable = [1u16; 64]; // Identity quantization
+
+        // Test zigzag position 2 should map to natural position 8
+        let mut coeffs = [0i16; 64];
+        coeffs[2] = 42; // Put value at zigzag position 2
+        let result = dequantize(&coeffs, &qtable);
+        assert_eq!(result[8], 42, "zigzag[2] should map to natural[8]");
+
+        // Test zigzag position 3 should map to natural position 16
+        let mut coeffs = [0i16; 64];
+        coeffs[3] = 42;
+        let result = dequantize(&coeffs, &qtable);
+        assert_eq!(result[16], 42, "zigzag[3] should map to natural[16]");
+
+        // Test zigzag position 5 should map to natural position 2
+        let mut coeffs = [0i16; 64];
+        coeffs[5] = 42;
+        let result = dequantize(&coeffs, &qtable);
+        assert_eq!(result[2], 42, "zigzag[5] should map to natural[2]");
     }
 }

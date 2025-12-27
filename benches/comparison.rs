@@ -583,7 +583,12 @@ fn bench_png_all_presets(c: &mut Criterion) {
                     let mut output = Vec::new();
                     let encoder = image::codecs::png::PngEncoder::new(&mut output);
                     encoder
-                        .write_image(black_box(pixels), *size, *size, image::ColorType::Rgb8.into())
+                        .write_image(
+                            black_box(pixels),
+                            *size,
+                            *size,
+                            image::ColorType::Rgb8.into(),
+                        )
                         .unwrap();
                     output
                 });
@@ -775,7 +780,12 @@ fn bench_jpeg_all_presets(c: &mut Criterion) {
                     let encoder =
                         image::codecs::jpeg::JpegEncoder::new_with_quality(&mut output, 85);
                     encoder
-                        .write_image(black_box(pixels), *size, *size, image::ColorType::Rgb8.into())
+                        .write_image(
+                            black_box(pixels),
+                            *size,
+                            *size,
+                            image::ColorType::Rgb8.into(),
+                        )
                         .unwrap();
                     output
                 });
@@ -1086,7 +1096,12 @@ fn bench_jpeg_equivalent_settings(c: &mut Criterion) {
                     let encoder =
                         image::codecs::jpeg::JpegEncoder::new_with_quality(&mut output, 85);
                     encoder
-                        .write_image(black_box(pixels), *width, *height, image::ColorType::Rgb8.into())
+                        .write_image(
+                            black_box(pixels),
+                            *width,
+                            *height,
+                            image::ColorType::Rgb8.into(),
+                        )
                         .unwrap();
                     output
                 });

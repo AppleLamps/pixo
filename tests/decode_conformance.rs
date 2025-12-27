@@ -130,8 +130,7 @@ fn test_png_encode_decode_various_sizes() {
     let pixels_2x2_rgb = vec![255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 0]; // 2x2 RGB
     let encoded =
         png::encode(&pixels_2x2_rgb, 2, 2, ColorType::Rgb).expect("encode should succeed");
-    let decoded =
-        decode_png(&encoded).unwrap_or_else(|e| panic!("decode failed for 2x2 RGB: {}", e));
+    let decoded = decode_png(&encoded).unwrap_or_else(|e| panic!("decode failed for 2x2 RGB: {e}"));
     assert_eq!(decoded.width, 2);
     assert_eq!(decoded.height, 2);
     assert_eq!(decoded.color_type, ColorType::Rgb);
@@ -144,8 +143,7 @@ fn test_png_encode_decode_various_sizes() {
     }
     let encoded =
         png::encode(&pixels_4x4_rgb, 4, 4, ColorType::Rgb).expect("encode should succeed");
-    let decoded =
-        decode_png(&encoded).unwrap_or_else(|e| panic!("decode failed for 4x4 RGB: {}", e));
+    let decoded = decode_png(&encoded).unwrap_or_else(|e| panic!("decode failed for 4x4 RGB: {e}"));
     assert_eq!(decoded.width, 4);
     assert_eq!(decoded.height, 4);
     assert_eq!(decoded.pixels, pixels_4x4_rgb);
@@ -293,8 +291,8 @@ fn test_jpeg_encode_decode_various_sizes() {
         let encoded = jpeg::encode(&pixels, w as u32, h as u32, 85).expect("encode");
         let decoded = decode_jpeg(&encoded).expect("decode");
 
-        assert_eq!(decoded.width, w as u32, "width mismatch for {}x{}", w, h);
-        assert_eq!(decoded.height, h as u32, "height mismatch for {}x{}", w, h);
+        assert_eq!(decoded.width, w as u32, "width mismatch for {w}x{h}");
+        assert_eq!(decoded.height, h as u32, "height mismatch for {w}x{h}");
     }
 }
 
@@ -370,8 +368,7 @@ fn test_jpeg_encode_decode_solid_color() {
 
     assert!(
         avg_diff < 10,
-        "Average pixel difference too high: {}",
-        avg_diff
+        "Average pixel difference too high: {avg_diff}"
     );
 }
 

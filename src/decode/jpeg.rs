@@ -22,6 +22,7 @@ const APP15: u8 = 0xEF; // Application segment 15
 const COM: u8 = 0xFE; // Comment
 
 /// Decoded JPEG image.
+#[derive(Debug)]
 pub struct JpegImage {
     /// Image width in pixels.
     pub width: u32,
@@ -323,6 +324,14 @@ impl<'a> JpegDecoder<'a> {
             let sampling = segment[offset + 1];
             let h_sampling = (sampling >> 4) & 0x0F;
             let v_sampling = sampling & 0x0F;
+
+            // Validate sampling factors (0 is invalid, would cause division by zero)
+            if h_sampling == 0 || v_sampling == 0 {
+                return Err(Error::InvalidDecode(format!(
+                    "invalid sampling factors {h_sampling}x{v_sampling} for component {id}"
+                )));
+            }
+
             let quant_table_id = segment[offset + 2];
 
             self.max_h_sampling = self.max_h_sampling.max(h_sampling);
@@ -615,6 +624,9 @@ impl<'a> JpegDecoder<'a> {
 
 /// Find the end of entropy-coded data (before next marker).
 fn find_entropy_end(data: &[u8]) -> usize {
+    if data.len() < 2 {
+        return data.len();
+    }
     let mut i = 0;
     while i < data.len() - 1 {
         if data[i] == 0xFF && data[i + 1] != 0x00 && data[i + 1] != 0xFF {
@@ -845,6 +857,19 @@ mod tests {
     }
 
     #[test]
+    fn test_find_entropy_end_empty() {
+        // Empty slice should not underflow
+        assert_eq!(find_entropy_end(&[]), 0);
+    }
+
+    #[test]
+    fn test_find_entropy_end_single_byte() {
+        // Single byte - need at least 2 for marker check
+        assert_eq!(find_entropy_end(&[0xFF]), 1);
+        assert_eq!(find_entropy_end(&[0x12]), 1);
+    }
+
+    #[test]
     fn test_component_default() {
         let comp = Component::default();
         assert_eq!(comp.h_sampling, 0);
@@ -857,6 +882,49 @@ mod tests {
         let table = HuffmanTable::default();
         assert!(table.values.is_empty());
         assert_eq!(table.max_code[1], -1);
+    }
+
+    #[test]
+    fn test_jpeg_decode_zero_sampling_factor() {
+        // Craft a minimal JPEG with zero sampling factor in SOF0
+        // This should return an error, not panic with division by zero
+        let mut jpeg = Vec::new();
+
+        // SOI marker
+        jpeg.extend_from_slice(&[0xFF, 0xD8]);
+
+        // SOF0 marker with zero sampling factors
+        // FF C0 = SOF0 marker
+        // 00 0B = length (11 bytes including length field)
+        // 08 = 8-bit precision
+        // 00 08 = height (8)
+        // 00 08 = width (8)
+        // 01 = 1 component
+        // 01 = component ID
+        // 00 = sampling factors: h=0, v=0 (INVALID!)
+        // 00 = quantization table ID
+        jpeg.extend_from_slice(&[
+            0xFF, 0xC0, // SOF0 marker
+            0x00, 0x0B, // length
+            0x08, // precision
+            0x00, 0x08, // height
+            0x00, 0x08, // width
+            0x01, // num components
+            0x01, // component ID
+            0x00, // h_sampling=0, v_sampling=0 (both invalid!)
+            0x00, // quant table
+        ]);
+
+        // EOI marker
+        jpeg.extend_from_slice(&[0xFF, 0xD9]);
+
+        let result = decode_jpeg(&jpeg);
+        assert!(result.is_err(), "should error on zero sampling factor");
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("sampling factors"),
+            "error should mention sampling factors: {err}"
+        );
     }
 
     #[test]

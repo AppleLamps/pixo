@@ -197,8 +197,11 @@ impl<'a> MsbBitReader<'a> {
     pub fn consume(&mut self, n: u8) {
         debug_assert!(n <= self.bits_in_buf);
         self.bits_in_buf -= n;
-        // Clear consumed bits
-        self.bit_buf &= (1 << self.bits_in_buf) - 1;
+        // Clear consumed bits (use checked_shl to avoid overflow when bits_in_buf is 32)
+        self.bit_buf &= 1u32
+            .checked_shl(self.bits_in_buf as u32)
+            .unwrap_or(0)
+            .wrapping_sub(1);
     }
 
     /// Read `n` bits MSB-first.
@@ -433,5 +436,17 @@ mod tests {
         assert_eq!(reader.read_bits(6).unwrap(), 0b111100);
         // Read 6 bits crossing the byte boundary
         assert_eq!(reader.read_bits(6).unwrap(), 0b000000);
+    }
+
+    #[test]
+    fn test_msb_reader_consume_zero_with_full_buffer() {
+        // Verify that consume(0) doesn't overflow when buffer has 32 bits.
+        // peek_bits(25) requires 4 bytes to fill buffer (32 bits total).
+        let data = [0x12, 0x34, 0x56, 0x78, 0x9A];
+        let mut reader = MsbBitReader::new(&data);
+        reader.peek_bits(25).unwrap(); // Forces buffer to have 32 bits
+        reader.consume(0); // Previously caused 1 << 32 overflow
+                           // Buffer should still have all 32 bits intact
+        assert_eq!(reader.peek_bits(8).unwrap(), 0x12);
     }
 }

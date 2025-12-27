@@ -238,11 +238,6 @@ fn fixed_distance_table() -> Result<HuffmanTable> {
     HuffmanTable::from_lengths(&lengths)
 }
 
-/// Inflate a raw DEFLATE stream (no zlib wrapper).
-pub fn inflate(data: &[u8]) -> Result<Vec<u8>> {
-    inflate_with_size(data, None)
-}
-
 /// Inflate a raw DEFLATE stream with optional expected output size.
 ///
 /// When `expected_size` is provided, the output buffer is pre-allocated
@@ -269,14 +264,6 @@ fn inflate_with_size(data: &[u8], expected_size: Option<usize>) -> Result<Vec<u8
     }
 
     Ok(output)
-}
-
-/// Inflate a zlib-wrapped stream (RFC 1950).
-///
-/// If `expected_size` is provided, the output buffer will be pre-allocated
-/// and the final size validated against it.
-pub fn inflate_zlib(data: &[u8]) -> Result<Vec<u8>> {
-    inflate_zlib_with_size(data, None)
 }
 
 /// Inflate a zlib-wrapped stream with optional expected output size.
@@ -527,7 +514,7 @@ mod tests {
         data.extend_from_slice(&[0xFA, 0xFF]); // NLEN = 0xFFFA
         data.extend_from_slice(b"hello");
 
-        let output = inflate(&data).unwrap();
+        let output = inflate_with_size(&data, None).unwrap();
         assert_eq!(output, b"hello");
     }
 
@@ -538,7 +525,7 @@ mod tests {
 
         let original = b"The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.";
         let compressed = deflate_zlib(original, 6);
-        let decompressed = inflate_zlib(&compressed).unwrap();
+        let decompressed = inflate_zlib_with_size(&compressed, None).unwrap();
 
         assert_eq!(decompressed, original.to_vec());
     }
@@ -549,7 +536,7 @@ mod tests {
 
         let original: &[u8] = &[];
         let compressed = deflate_zlib(original, 6);
-        let decompressed = inflate_zlib(&compressed).unwrap();
+        let decompressed = inflate_zlib_with_size(&compressed, None).unwrap();
 
         assert_eq!(decompressed, original.to_vec());
     }
@@ -561,7 +548,7 @@ mod tests {
         for size in [1, 10, 100, 1000, 10000] {
             let original: Vec<u8> = (0..size).map(|i| (i % 256) as u8).collect();
             let compressed = deflate_zlib(&original, 6);
-            let decompressed = inflate_zlib(&compressed).unwrap();
+            let decompressed = inflate_zlib_with_size(&compressed, None).unwrap();
             assert_eq!(decompressed, original, "failed at size {size}");
         }
     }
@@ -576,9 +563,9 @@ mod tests {
         for size in [100, 500, 1000] {
             let original = vec![42u8; size];
             let compressed = deflate_zlib(&original, 6);
-            let decompressed =
-                inflate_zlib(&compressed).expect(&format!("failed at size {}", size));
-            assert_eq!(decompressed, original, "mismatch at size {}", size);
+            let decompressed = inflate_zlib_with_size(&compressed, None)
+                .unwrap_or_else(|_| panic!("failed at size {size}"));
+            assert_eq!(decompressed, original, "mismatch at size {size}");
         }
     }
 
@@ -603,7 +590,7 @@ mod tests {
         let len = compressed.len();
         compressed[len - 1] ^= 0xFF;
 
-        assert!(inflate_zlib(&compressed).is_err());
+        assert!(inflate_zlib_with_size(&compressed, None).is_err());
     }
 
     #[test]
@@ -623,7 +610,7 @@ mod tests {
         // Large enough data to trigger dynamic Huffman
         let original: Vec<u8> = (0..5000).map(|i| (i * 17 % 256) as u8).collect();
         let compressed = deflate_zlib(&original, 9);
-        let decompressed = inflate_zlib(&compressed).unwrap();
+        let decompressed = inflate_zlib_with_size(&compressed, None).unwrap();
 
         assert_eq!(decompressed, original);
     }
@@ -637,12 +624,11 @@ mod tests {
         let compressed = deflate_zlib(original, 6);
 
         // First verify the regular inflate works
-        let decompressed_no_size = inflate_zlib(&compressed).unwrap();
+        let decompressed_no_size = inflate_zlib_with_size(&compressed, None).unwrap();
         assert_eq!(decompressed_no_size.len(), original.len());
 
         // Now test with expected size
-        let decompressed =
-            inflate_zlib_with_size(&compressed, Some(original.len())).unwrap();
+        let decompressed = inflate_zlib_with_size(&compressed, Some(original.len())).unwrap();
 
         assert_eq!(decompressed, original.to_vec());
     }

@@ -68,8 +68,7 @@ struct IhdrData {
 /// Check if tRNS chunk contains any non-opaque (< 255) alpha values.
 /// Returns false if trns is None or all values are 255 (fully opaque).
 fn has_alpha_in_trns(trns: Option<&[u8]>) -> bool {
-    trns.map(|a| a.iter().any(|&v| v != 0xFF))
-        .unwrap_or(false)
+    trns.map(|a| a.iter().any(|&v| v != 0xFF)).unwrap_or(false)
 }
 
 /// Calculate the expected size of decompressed IDAT data.
@@ -501,7 +500,7 @@ fn convert_to_pixels(
             // Only output RGBA if tRNS contains non-opaque values
             if has_alpha_in_trns(trns) {
                 let alpha_table = trns.unwrap(); // Safe: has_alpha_in_trns returned true
-                // Output RGBA
+                                                 // Output RGBA
                 let mut pixels = Vec::with_capacity(width * height * 4);
                 for &idx in &indices {
                     if (idx as usize) < palette.len() {
@@ -933,7 +932,7 @@ mod tests {
         // Should be RGBA since tRNS has non-255 values
         assert_eq!(decoded.color_type, ColorType::Rgba);
         assert_eq!(decoded.pixels.len(), 2 * 4); // 2 pixels * 4 bytes (RGBA)
-        // First pixel should have alpha 128
+                                                 // First pixel should have alpha 128
         assert_eq!(decoded.pixels[3], 128);
         // Second pixel should have alpha 255
         assert_eq!(decoded.pixels[7], 255);
