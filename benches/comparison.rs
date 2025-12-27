@@ -340,7 +340,7 @@ fn encode_with_oxipng(
         let mut file = fs::File::create(&input_path).ok()?;
         let encoder = image::codecs::png::PngEncoder::new(&mut file);
         encoder
-            .write_image(pixels, width, height, image::ColorType::Rgb8)
+            .write_image(pixels, width, height, image::ColorType::Rgb8.into())
             .ok()?;
     }
 
@@ -429,7 +429,7 @@ fn encode_with_pngquant(
         let mut file = fs::File::create(&input_path).ok()?;
         let encoder = image::codecs::png::PngEncoder::new(&mut file);
         encoder
-            .write_image(pixels, width, height, image::ColorType::Rgb8)
+            .write_image(pixels, width, height, image::ColorType::Rgb8.into())
             .ok()?;
     }
 
@@ -583,7 +583,7 @@ fn bench_png_all_presets(c: &mut Criterion) {
                     let mut output = Vec::new();
                     let encoder = image::codecs::png::PngEncoder::new(&mut output);
                     encoder
-                        .write_image(black_box(pixels), *size, *size, image::ColorType::Rgb8)
+                        .write_image(black_box(pixels), *size, *size, image::ColorType::Rgb8.into())
                         .unwrap();
                     output
                 });
@@ -775,7 +775,7 @@ fn bench_jpeg_all_presets(c: &mut Criterion) {
                     let encoder =
                         image::codecs::jpeg::JpegEncoder::new_with_quality(&mut output, 85);
                     encoder
-                        .write_image(black_box(pixels), *size, *size, image::ColorType::Rgb8)
+                        .write_image(black_box(pixels), *size, *size, image::ColorType::Rgb8.into())
                         .unwrap();
                     output
                 });
@@ -951,7 +951,7 @@ fn bench_png_equivalent_settings(c: &mut Criterion) {
                     let mut output = Vec::new();
                     let encoder = image::codecs::png::PngEncoder::new(&mut output);
                     encoder
-                        .write_image(black_box(pixels), 512, 512, image::ColorType::Rgb8)
+                        .write_image(black_box(pixels), 512, 512, image::ColorType::Rgb8.into())
                         .unwrap();
                     output
                 });
@@ -1006,7 +1006,7 @@ fn bench_png_equivalent_settings(c: &mut Criterion) {
                             black_box(pixels),
                             img.width,
                             img.height,
-                            image::ColorType::Rgb8,
+                            image::ColorType::Rgb8.into(),
                         )
                         .unwrap();
                     output
@@ -1086,7 +1086,7 @@ fn bench_jpeg_equivalent_settings(c: &mut Criterion) {
                     let encoder =
                         image::codecs::jpeg::JpegEncoder::new_with_quality(&mut output, 85);
                     encoder
-                        .write_image(black_box(pixels), *width, *height, image::ColorType::Rgb8)
+                        .write_image(black_box(pixels), *width, *height, image::ColorType::Rgb8.into())
                         .unwrap();
                     output
                 });
@@ -1162,7 +1162,7 @@ fn bench_jpeg_equivalent_settings(c: &mut Criterion) {
                             black_box(pixels),
                             img.width,
                             img.height,
-                            image::ColorType::Rgb8,
+                            image::ColorType::Rgb8.into(),
                         )
                         .unwrap();
                     output
@@ -1260,7 +1260,7 @@ fn bench_png_best_effort(c: &mut Criterion) {
                     image::codecs::png::FilterType::Adaptive,
                 );
                 encoder
-                    .write_image(black_box(pixels), 512, 512, image::ColorType::Rgb8)
+                    .write_image(black_box(pixels), 512, 512, image::ColorType::Rgb8.into())
                     .unwrap();
                 output
             });
@@ -1335,7 +1335,7 @@ fn bench_jpeg_best_effort(c: &mut Criterion) {
                 let mut output = Vec::new();
                 let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut output, 85);
                 encoder
-                    .write_image(black_box(pixels), 512, 512, image::ColorType::Rgb8)
+                    .write_image(black_box(pixels), 512, 512, image::ColorType::Rgb8.into())
                     .unwrap();
                 output
             });
@@ -1908,7 +1908,7 @@ fn measure_image_png_encode(pixels: &[u8], width: u32, height: u32) -> (usize, D
         let mut output = Vec::new();
         let encoder = image::codecs::png::PngEncoder::new(&mut output);
         encoder
-            .write_image(pixels, width, height, image::ColorType::Rgb8)
+            .write_image(pixels, width, height, image::ColorType::Rgb8.into())
             .unwrap();
     }
 
@@ -1920,7 +1920,7 @@ fn measure_image_png_encode(pixels: &[u8], width: u32, height: u32) -> (usize, D
         let mut output = Vec::new();
         let encoder = image::codecs::png::PngEncoder::new(&mut output);
         encoder
-            .write_image(pixels, width, height, image::ColorType::Rgb8)
+            .write_image(pixels, width, height, image::ColorType::Rgb8.into())
             .unwrap();
         last_output = output;
     }
@@ -1935,7 +1935,7 @@ fn measure_image_jpeg_encode(pixels: &[u8], width: u32, height: u32) -> (usize, 
         let mut output = Vec::new();
         let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut output, 85);
         encoder
-            .write_image(pixels, width, height, image::ColorType::Rgb8)
+            .write_image(pixels, width, height, image::ColorType::Rgb8.into())
             .unwrap();
     }
 
@@ -1947,7 +1947,7 @@ fn measure_image_jpeg_encode(pixels: &[u8], width: u32, height: u32) -> (usize, 
         let mut output = Vec::new();
         let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut output, 85);
         encoder
-            .write_image(pixels, width, height, image::ColorType::Rgb8)
+            .write_image(pixels, width, height, image::ColorType::Rgb8.into())
             .unwrap();
         last_output = output;
     }
