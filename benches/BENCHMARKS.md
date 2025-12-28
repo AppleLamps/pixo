@@ -263,7 +263,7 @@ Critical for web applications where bundle size impacts load time.
 | wasm-mozjpeg    | ~208 KB    | Emscripten compiled                 |
 | squoosh oxipng  | ~625 KB    | Google's Squoosh codec              |
 | squoosh mozjpeg | ~803 KB    | Google's Squoosh codec              |
-| image crate     | ~6-10 MB   | Pure Rust, many codecs included     |
+| image crate     | ~6-10 MB   | Many codecs included     |
 
 ### Binary Size Footnotes
 
