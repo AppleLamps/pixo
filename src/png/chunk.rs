@@ -39,16 +39,9 @@ mod tests {
         let mut output = Vec::new();
         write_chunk(&mut output, b"IEND", &[]);
 
-        // IEND chunk should be 12 bytes (4 length + 4 type + 0 data + 4 CRC)
         assert_eq!(output.len(), 12);
-
-        // Length should be 0
         assert_eq!(&output[0..4], &[0, 0, 0, 0]);
-
-        // Type should be IEND
         assert_eq!(&output[4..8], b"IEND");
-
-        // CRC of "IEND" should be 0xAE426082
         assert_eq!(&output[8..12], &0xAE426082_u32.to_be_bytes());
     }
 
@@ -57,16 +50,9 @@ mod tests {
         let mut output = Vec::new();
         write_chunk(&mut output, b"tEXt", b"hello");
 
-        // Should be 4 + 4 + 5 + 4 = 17 bytes
         assert_eq!(output.len(), 17);
-
-        // Length should be 5
         assert_eq!(&output[0..4], &[0, 0, 0, 5]);
-
-        // Type
         assert_eq!(&output[4..8], b"tEXt");
-
-        // Data
         assert_eq!(&output[8..13], b"hello");
     }
 }
