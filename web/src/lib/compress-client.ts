@@ -26,6 +26,15 @@ function getWorker(): Worker {
         pendingRequests.delete(id);
         if (success) {
           if (result.data instanceof ArrayBuffer) {
+            const expectedSize = result.width * result.height * 4;
+            if (result.data.byteLength !== expectedSize) {
+              pending.reject(
+                new Error(
+                  `Invalid buffer size: expected ${expectedSize}, got ${result.data.byteLength}`,
+                ),
+              );
+              return;
+            }
             const reconstructed = new ImageData(
               new Uint8ClampedArray(result.data),
               result.width,
