@@ -70,6 +70,7 @@ export async function compressImage(
     const id = `compress-${++messageId}`;
     const timeout = setTimeout(() => {
       pendingRequests.delete(id);
+      getWorker().postMessage({ id, type: "cancel" });
       reject(new Error("Compression timeout"));
     }, REQUEST_TIMEOUT);
 
@@ -97,6 +98,7 @@ export async function resizeImage(
     const id = `resize-${++messageId}`;
     const timeout = setTimeout(() => {
       pendingRequests.delete(id);
+      getWorker().postMessage({ id, type: "cancel" });
       reject(new Error("Resize timeout"));
     }, REQUEST_TIMEOUT);
 
