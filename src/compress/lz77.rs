@@ -1498,7 +1498,6 @@ mod tests {
         let data = b"abcdefgh";
         let tokens = compressor.compress(data);
 
-        // All literals
         assert_eq!(tokens.len(), 8);
         for (i, &token) in tokens.iter().enumerate() {
             assert_eq!(token, Token::Literal(data[i]));
@@ -1511,8 +1510,7 @@ mod tests {
         let data = b"abcabcabc";
         let tokens = compressor.compress(data);
 
-        // Should have "abc" as literals, then matches
-        assert!(tokens.len() < 9); // Less than all literals
+        assert!(tokens.len() < 9);
     }
 
     #[test]
@@ -1521,7 +1519,6 @@ mod tests {
         let data = b"abcdefghijabcdefghijabcdefghij";
         let tokens = compressor.compress(data);
 
-        // Should compress well
         assert!(tokens.len() < 20);
     }
 
@@ -1547,14 +1544,13 @@ mod tests {
 
     #[test]
     fn test_packed_token_match() {
-        // Test various lengths and distances including edge cases
         let test_cases = [
-            (3, 1),       // min length, min distance
-            (258, 1),     // max length, min distance
-            (3, 32768),   // min length, max distance (the bug case!)
-            (258, 32768), // max length, max distance
-            (100, 100),   // typical values
-            (3, 32767),   // just below max distance
+            (3, 1),
+            (258, 1),
+            (3, 32768),
+            (258, 32768),
+            (100, 100),
+            (3, 32767),
         ];
 
         for (length, distance) in test_cases {
@@ -1578,7 +1574,6 @@ mod tests {
 
     #[test]
     fn test_packed_token_max_distance_not_literal() {
-        // Regression test: distance=32768 previously collided with LITERAL_FLAG
         let token = PackedToken::match_(10, 32768);
         assert!(
             !token.is_literal(),
@@ -1606,7 +1601,6 @@ mod tests {
         let data = b"abcdefgh";
         let tokens = compressor.compress_optimal(data, &cost_model);
 
-        // All literals
         assert_eq!(tokens.len(), 8);
         for (i, &token) in tokens.iter().enumerate() {
             assert_eq!(token, Token::Literal(data[i]));
@@ -1620,7 +1614,6 @@ mod tests {
         let data = b"abcabcabc";
         let tokens = compressor.compress_optimal(data, &cost_model);
 
-        // Should have "abc" as literals, then matches (same as greedy for this case)
         assert!(
             tokens.len() < 9,
             "Expected fewer than 9 tokens, got {}",
@@ -1635,7 +1628,6 @@ mod tests {
         let data = b"The quick brown fox jumps over the lazy dog. The quick brown fox jumps.";
         let tokens = compressor.compress_optimal(data, &cost_model);
 
-        // Verify we can reconstruct the original data from tokens
         let mut reconstructed = Vec::new();
         for token in &tokens {
             match token {
@@ -1655,15 +1647,11 @@ mod tests {
     fn test_cost_model_fixed() {
         let model = CostModel::fixed();
 
-        // Literal 'a' (97) should cost 8 bits (it's in 0-143 range)
         assert!((model.literal_cost(b'a') - 8.0).abs() < 0.01);
 
-        // Literal 200 should cost 9 bits (it's in 144-255 range)
         assert!((model.literal_cost(200) - 9.0).abs() < 0.01);
 
-        // Match cost should include length symbol + extra bits + distance symbol + extra bits
         let match_cost = model.match_cost(3, 1);
-        // Length 3 = symbol 257 (7 bits, 0 extra), distance 1 = symbol 0 (5 bits, 0 extra)
         assert!((match_cost - 12.0).abs() < 0.01);
     }
 
@@ -1672,7 +1660,6 @@ mod tests {
         let mut lit_counts = [0u32; 286];
         let mut dist_counts = [0u32; 30];
 
-        // Simulate a distribution where 'a' is very common
         lit_counts[b'a' as usize] = 100;
         lit_counts[b'b' as usize] = 10;
         lit_counts[256] = 1; // end of block
@@ -1688,39 +1675,30 @@ mod tests {
 
     #[test]
     fn test_length_to_symbol() {
-        // Test boundary cases
-        assert_eq!(length_to_symbol(3), (257, 0)); // min length
-        assert_eq!(length_to_symbol(10), (264, 0)); // last 0-extra-bit code
-        assert_eq!(length_to_symbol(11), (265, 1)); // first 1-extra-bit code
-        assert_eq!(length_to_symbol(258), (285, 0)); // max length
+        assert_eq!(length_to_symbol(3), (257, 0));
+        assert_eq!(length_to_symbol(10), (264, 0));
+        assert_eq!(length_to_symbol(11), (265, 1));
+        assert_eq!(length_to_symbol(258), (285, 0));
     }
 
     #[test]
     fn test_distance_to_symbol() {
-        // Test small distances (direct lookup)
         assert_eq!(distance_to_symbol(1), (0, 0));
         assert_eq!(distance_to_symbol(4), (3, 0));
 
-        // Test larger distances (bit manipulation)
         assert_eq!(distance_to_symbol(5), (4, 1));
         assert_eq!(distance_to_symbol(6), (4, 1));
     }
 
     #[test]
     fn test_find_best_match_no_zero_distance() {
-        // Regression test: find_best_match should never return distance=0
-        // This bug manifests when min_match_length > MIN_MATCH_LENGTH and no match is found.
-        // The best_length would be initialized to min_match_length - 1 (e.g., 3) while
-        // best_distance stays at 0, causing an invalid (3, 0) match to be returned.
         let mut compressor = Lz77Compressor::new(6);
 
-        // Create high-entropy data to trigger min_match_length > 3
         let mut unique_data: Vec<u8> = (0..=255).collect();
-        unique_data.extend_from_slice(b"xyz"); // Short unrepeated sequence at end
+        unique_data.extend_from_slice(b"xyz");
 
         let result = compressor.compress(&unique_data);
 
-        // Verify no zero-distance matches in result
         for token in &result {
             if let Token::Match { distance, .. } = token {
                 assert!(*distance > 0, "Found invalid match with distance 0");
@@ -1730,17 +1708,12 @@ mod tests {
 
     #[test]
     fn test_find_best_match_returns_none_for_no_match() {
-        // Direct test of find_best_match with min_match_length > MIN_MATCH_LENGTH
         let compressor = Lz77Compressor::new(6);
 
-        // Data with no possible matches (all unique bytes, too short for matches)
         let data: Vec<u8> = (0..10).collect();
 
-        // With min_match_length = 4, best_length is initialized to 3
-        // If no match is found, it should return None, not Some((3, 0))
         let result = compressor.find_best_match(&data, 5, 128, 65, 4);
 
-        // Should be None since there's no valid match
         assert!(
             result.is_none() || result.unwrap().1 > 0,
             "find_best_match returned invalid match with distance 0: {result:?}"
@@ -1749,34 +1722,24 @@ mod tests {
 
     #[test]
     fn test_find_best_match_respects_min_match_length() {
-        // Regression test: find_best_match should never return a match shorter than
-        // min_match_length, and should never return a zero distance.
         let mut compressor = Lz77Compressor::new(6);
 
-        // Create data where the only possible match is exactly 4 bytes.
-        // "abcdXYZWabcdPQRS" - "abcd" appears at position 0 and 8, but
-        // the bytes after differ, limiting match to 4 bytes.
         let data = b"abcdXYZWabcdPQRS";
 
-        // Reset hash tables
         compressor.head.fill(-1);
         compressor.head3.fill(-1);
         compressor.prev.fill(-1);
 
-        // Insert the first occurrence into hash tables (positions 0-7)
         for i in 0..8 {
             compressor.update_hash(data, i);
         }
 
-        // At position 8, we should find a 4-byte match (abcd).
-        // With min_match_length = 5, we should get None (not Some((4, 0)))
         let result = compressor.find_best_match(data, 8, 100, 258, 5);
         assert!(
             result.is_none(),
             "find_best_match returned {result:?} when no match >= min_match_length exists"
         );
 
-        // With min_match_length = 4, we should get a valid match
         let result = compressor.find_best_match(data, 8, 100, 258, 4);
         assert!(result.is_some(), "Expected a match with min_match_length=4");
         let (len, dist) = result.unwrap();
@@ -1787,29 +1750,23 @@ mod tests {
 
     #[test]
     fn test_find_best_match_ht_respects_min_match_length() {
-        // Same regression test for the HT-style matchfinder
-        let mut compressor = Lz77Compressor::new(1); // Level 1 uses HT
+        let mut compressor = Lz77Compressor::new(1);
 
-        // Same test data: only a 4-byte match is possible
         let data = b"abcdXYZWabcdPQRS";
 
-        // Reset HT buckets
         for bucket in &mut compressor.ht_buckets {
             *bucket = [-1; HT_BUCKET_SIZE];
         }
 
-        // Insert first occurrence at position 0
         let hash = hash4_ht(data, 0);
         compressor.ht_buckets[hash][0] = 0;
 
-        // At position 8, with min_match_length = 5, we should get None
         let result = compressor.find_best_match_ht(data, 8, 258, 5);
         assert!(
             result.is_none(),
             "find_best_match_ht returned {result:?} when no match >= min_match_length exists"
         );
 
-        // With min_match_length = 4, we should get a valid match
         let result = compressor.find_best_match_ht(data, 8, 258, 4);
         assert!(result.is_some(), "Expected a match with min_match_length=4");
         let (len, dist) = result.unwrap();
