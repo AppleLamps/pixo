@@ -178,57 +178,41 @@ mod tests {
     #[test]
     fn test_match_length_fallback() {
         let data = b"abcdefghijklmnop";
-        // Same position should match fully
         assert_eq!(match_length(data, 0, 0, 16), 16);
-        // Different data should not match
         assert_eq!(match_length(data, 0, 1, 16), 0);
     }
 
     #[test]
     fn test_match_length_partial() {
         let data = b"abcdefgh12345678";
-        // Both halves are same length but different content
         assert_eq!(match_length(data, 0, 8, 8), 0);
     }
 
     #[test]
     fn test_match_length_remainder_bytes() {
-        // Test the remainder path when match extends past 8-byte chunks
-        // Create data where match ends on a non-8-byte boundary
         let data = b"abcdefghijklXXXXabcdefghijklYYYY";
-        // Positions 0 and 16 have matching first 12 bytes, then differ
         assert_eq!(match_length(data, 0, 16, 16), 12);
 
-        // Test with exactly 3 matching bytes (less than 8)
         let data2 = b"abcXXXXXabcYYYYY";
         assert_eq!(match_length(data2, 0, 8, 8), 3);
 
-        // Test with 9 matching bytes (8 + 1 remainder)
         let data3 = b"abcdefghiXXXXXXXabcdefghiYYYYYYY";
         assert_eq!(match_length(data3, 0, 16, 16), 9);
 
-        // Test with 11 matching bytes (8 + 3 remainder)
         let data4 = b"abcdefghijkXXXXXabcdefghijkYYYYY";
         assert_eq!(match_length(data4, 0, 16, 16), 11);
 
-        // Test remainder path: data where all 8-byte chunks match,
-        // then remaining bytes also match (exercising line 85)
-        // max_len = 11 means we process 8 bytes, then need to check 3 remaining
         let data5 = b"abcdefghijkabcdefghijk";
-        // Both positions have identical data, max_len limits the match
         assert_eq!(match_length(data5, 0, 11, 11), 11);
 
-        // Test with max_len = 10: process 8 bytes, check 2 remaining that match
         let data6 = b"1234567890123456789012345";
         assert_eq!(match_length(data6, 0, 10, 10), 10);
     }
 
     #[test]
     fn test_score_filter_fallback() {
-        // Score should sum absolute values treating bytes as signed
         assert_eq!(score_filter(&[0, 0, 0, 0]), 0);
         assert_eq!(score_filter(&[1, 1, 1, 1]), 4);
-        // 0xFF as i8 = -1, abs = 1
         assert_eq!(score_filter(&[0xFF, 0xFF]), 2);
     }
 
@@ -237,7 +221,6 @@ mod tests {
         let row = [10, 20, 30, 40];
         let mut output = Vec::new();
         filter_sub(&row, 1, &mut output);
-        // Each byte minus the one to its left
         assert_eq!(output, vec![10, 10, 10, 10]);
     }
 
@@ -247,7 +230,6 @@ mod tests {
         let prev = [5, 10, 15, 20];
         let mut output = Vec::new();
         filter_up(&row, &prev, &mut output);
-        // Each byte minus the one above
         assert_eq!(output, vec![5, 10, 15, 20]);
     }
 
@@ -257,8 +239,6 @@ mod tests {
         let prev = [0, 0, 0, 0];
         let mut output = Vec::new();
         filter_average(&row, &prev, 1, &mut output);
-        // First: 10 - avg(0, 0) = 10
-        // Second: 20 - avg(10, 0) = 20 - 5 = 15
         assert_eq!(output[0], 10);
         assert_eq!(output[1], 15);
     }
@@ -269,20 +249,15 @@ mod tests {
         let prev = [5, 10, 15, 20];
         let mut output = Vec::new();
         filter_paeth(&row, &prev, 1, &mut output);
-        // Just verify it produces output
         assert_eq!(output.len(), 4);
     }
 
     #[test]
     fn test_fallback_paeth_predictor() {
-        // Test the Paeth predictor function
         assert_eq!(fallback_paeth_predictor(0, 0, 0), 0);
         assert_eq!(fallback_paeth_predictor(100, 100, 100), 100);
-        // When a is closest
         assert_eq!(fallback_paeth_predictor(100, 0, 0), 100);
-        // When b is closest
         assert_eq!(fallback_paeth_predictor(0, 100, 0), 100);
-        // When c is closest
         assert_eq!(fallback_paeth_predictor(100, 100, 50), 100);
     }
 }
