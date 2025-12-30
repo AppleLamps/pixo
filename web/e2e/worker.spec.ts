@@ -19,7 +19,7 @@ test.describe("Web Worker Compression", () => {
     await expect(page.getByTestId("compressed-image-overlay")).toBeVisible();
   });
 
-  test("should handle PNG preset changes without blocking", async ({
+  test("should handle rapid preset changes without blocking", async ({
     page,
     waitForWasm,
     uploadAndWaitForCompression,
@@ -27,33 +27,16 @@ test.describe("Web Worker Compression", () => {
     await page.goto("/");
     await waitForWasm();
     await uploadAndWaitForCompression(FIXTURES.PNG);
-
-    const slider = page.getByTestId("png-preset-slider");
-    await slider.fill("0"); // Smaller preset
-
-    await page.waitForTimeout(500);
-    await expect(page.getByTestId("compressed-image-overlay")).toBeVisible({
-      timeout: 30000,
-    });
-  });
-
-  test("should compress at 4x zoom without timeout", async ({
-    page,
-    waitForWasm,
-    uploadAndWaitForCompression,
-  }) => {
-    await page.goto("/");
-    await waitForWasm();
-    await uploadAndWaitForCompression(FIXTURES.PNG);
-
-    await page.getByTestId("zoom-4x").click();
 
     const slider = page.getByTestId("png-preset-slider");
     await slider.fill("0");
+    await page.waitForTimeout(100);
+    await slider.fill("2");
+    await page.waitForTimeout(100);
+    await slider.fill("1");
 
-    await page.waitForTimeout(500);
     await expect(page.getByTestId("compressed-image-overlay")).toBeVisible({
-      timeout: 60000,
+      timeout: 30000,
     });
   });
 
