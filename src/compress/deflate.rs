@@ -1723,9 +1723,7 @@ mod tests {
         let data = b"Hello, World!";
         let compressed = deflate(data, 6);
 
-        // Should produce some output
         assert!(!compressed.is_empty());
-        // For short data, compression might not reduce size much
     }
 
     #[test]
@@ -1733,7 +1731,6 @@ mod tests {
         let data = b"abcabcabcabcabcabcabcabcabcabc";
         let compressed = deflate(data, 6);
 
-        // Repetitive data should compress well
         assert!(compressed.len() < data.len());
     }
 
@@ -1742,7 +1739,6 @@ mod tests {
         let data = b"hello";
         let compressed = deflate_zlib(data, 6);
 
-        // Header should be 0x78 0x9C for default-ish compression
         assert_eq!(&compressed[0..2], &[0x78, 0x9C]);
 
         let checksum = u32::from_be_bytes(compressed[compressed.len() - 4..].try_into().unwrap());
@@ -1754,7 +1750,6 @@ mod tests {
         let data = b"Hello, World!";
         let compressed = deflate_stored(data);
 
-        // Stored blocks have 5 bytes overhead per 65535 bytes
         assert_eq!(compressed.len(), data.len() + 5);
     }
 
@@ -1787,8 +1782,7 @@ mod tests {
         let encoded = deflate_zlib(&[], 6);
         let decoded = decompress_zlib(&encoded);
         assert!(decoded.is_empty());
-        // Header for default compression and empty body should be minimal
-        assert!(encoded.len() <= 11); // 2 header + 5 stored + 4 adler
+        assert!(encoded.len() <= 11);
     }
 
     #[test]

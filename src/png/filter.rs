@@ -686,18 +686,8 @@ mod tests {
 
     #[test]
     fn test_paeth_predictor() {
-        // When all are equal, should return that value
         assert_eq!(paeth_predictor(100, 100, 100), 100);
-
-        // When a=0, b=0, c=0, should return 0
         assert_eq!(paeth_predictor(0, 0, 0), 0);
-
-        // Test typical case: a=10, b=20, c=15
-        // p = a + b - c = 10 + 20 - 15 = 15
-        // pa = |p - a| = |15 - 10| = 5
-        // pb = |p - b| = |15 - 20| = 5
-        // pc = |p - c| = |15 - 15| = 0
-        // pc is smallest, so return c (15)
         assert_eq!(paeth_predictor(10, 20, 15), 15);
     }
 
@@ -707,15 +697,13 @@ mod tests {
         let mut output = Vec::new();
         filter_sub(&row, 3, &mut output);
 
-        // First 3 bytes: no left pixel, so unchanged
         assert_eq!(output[0], 10);
         assert_eq!(output[1], 20);
         assert_eq!(output[2], 30);
 
-        // Next 3 bytes: difference from 3 bytes back
-        assert_eq!(output[3], 40u8.wrapping_sub(10)); // 30
-        assert_eq!(output[4], 50u8.wrapping_sub(20)); // 30
-        assert_eq!(output[5], 60u8.wrapping_sub(30)); // 30
+        assert_eq!(output[3], 40u8.wrapping_sub(10));
+        assert_eq!(output[4], 50u8.wrapping_sub(20));
+        assert_eq!(output[5], 60u8.wrapping_sub(30));
     }
 
     #[test]
@@ -725,9 +713,9 @@ mod tests {
         let mut output = Vec::new();
         filter_up(&row, &prev, &mut output);
 
-        assert_eq!(output[0], 40); // 50 - 10
-        assert_eq!(output[1], 40); // 60 - 20
-        assert_eq!(output[2], 40); // 70 - 30
+        assert_eq!(output[0], 40);
+        assert_eq!(output[1], 40);
+        assert_eq!(output[2], 40);
     }
 
     #[test]
@@ -740,7 +728,6 @@ mod tests {
 
         let filtered = apply_filters(&data, 2, 1, 3, &options);
 
-        // Should be filter byte (0) + original data
         assert_eq!(filtered[0], FILTER_NONE);
         assert_eq!(&filtered[1..], &data[..]);
     }
@@ -758,8 +745,7 @@ mod tests {
 
         let filtered = apply_filters(&data, 2, 2, 3, &options);
 
-        // Should have 2 rows, each with filter byte
-        assert_eq!(filtered.len(), 2 * (1 + 6)); // 2 rows * (1 filter + 6 data)
+        assert_eq!(filtered.len(), 2 * (1 + 6));
         assert_eq!(filtered[0], FILTER_NONE);
         assert_eq!(filtered[7], FILTER_NONE);
     }
@@ -777,9 +763,7 @@ mod tests {
 
         let filtered = apply_filters(&data, 2, 2, 3, &options);
 
-        // Two rows, each 1 filter byte + 6 bytes
         assert_eq!(filtered.len(), 2 * (1 + 6));
-        // Filter bytes should be one of the defined filters
         assert!(matches!(filtered[0], FILTER_SUB | FILTER_UP | FILTER_PAETH));
         assert!(matches!(filtered[7], FILTER_SUB | FILTER_UP | FILTER_PAETH));
     }
@@ -791,12 +775,9 @@ mod tests {
         let mut output = Vec::new();
         filter_average(&row, &prev, 1, &mut output);
 
-        // First byte: left=0, above=50, avg=25
-        assert_eq!(output[0], 100u8.wrapping_sub(25)); // 75
-                                                       // Second byte: left=100, above=50, avg=75
-        assert_eq!(output[1], 100u8.wrapping_sub(75)); // 25
-                                                       // Third byte: left=100, above=50, avg=75
-        assert_eq!(output[2], 100u8.wrapping_sub(75)); // 25
+        assert_eq!(output[0], 100u8.wrapping_sub(25));
+        assert_eq!(output[1], 100u8.wrapping_sub(75));
+        assert_eq!(output[2], 100u8.wrapping_sub(75));
     }
 
     #[test]
@@ -806,13 +787,7 @@ mod tests {
         let mut output = Vec::new();
         filter_paeth(&row, &prev, 1, &mut output);
 
-        // First byte: left=0, above=50, upper_left=0
-        // p = 0 + 50 - 0 = 50
-        // pa = |50-0| = 50, pb = |50-50| = 0, pc = |50-0| = 50
-        // pb is smallest, return b=50
-        assert_eq!(output[0], 100u8.wrapping_sub(50)); // 50
-
-        // All output should be valid filtered values
+        assert_eq!(output[0], 100u8.wrapping_sub(50));
         assert_eq!(output.len(), 3);
     }
 
@@ -825,7 +800,6 @@ mod tests {
 
     #[test]
     fn test_score_filter_high_values() {
-        // 0x80 as i8 is -128, abs = 128
         let data = vec![0x80u8; 10];
         let score = score_filter(&data);
         assert_eq!(score, 128 * 10);
@@ -833,42 +807,34 @@ mod tests {
 
     #[test]
     fn test_score_filter_mixed() {
-        // Mix of positive and negative values (as i8)
-        let data = vec![1, 0xFF, 2, 0xFE]; // 1, -1, 2, -2 as i8
+        let data = vec![1, 0xFF, 2, 0xFE];
         let score = score_filter(&data);
-        // abs values: 1, 1, 2, 2 = 6
         assert_eq!(score, 6);
     }
 
     #[test]
     fn test_score_bigrams_all_same() {
-        // All same bytes = only 1 distinct bigram
         let data = vec![42u8; 100];
         let score = score_bigrams(&data);
-        assert_eq!(score, 1); // (42, 42) is the only bigram
+        assert_eq!(score, 1);
     }
 
     #[test]
     fn test_score_bigrams_all_unique() {
-        // Sequential bytes = many distinct bigrams
         let data: Vec<u8> = (0..10).collect();
         let score = score_bigrams(&data);
-        // Bigrams: (0,1), (1,2), (2,3), ..., (8,9) = 9 distinct bigrams
         assert_eq!(score, 9);
     }
 
     #[test]
     fn test_score_bigrams_repeating_pattern() {
-        // Repeating pattern should have fewer distinct bigrams
         let data = vec![1, 2, 1, 2, 1, 2, 1, 2];
         let score = score_bigrams(&data);
-        // Bigrams: (1,2), (2,1) = 2 distinct bigrams
         assert_eq!(score, 2);
     }
 
     #[test]
     fn test_score_bigrams_single_byte() {
-        // Single byte = no bigrams
         let data = vec![42u8];
         let score = score_bigrams(&data);
         assert_eq!(score, 0);
@@ -876,7 +842,6 @@ mod tests {
 
     #[test]
     fn test_score_bigrams_empty() {
-        // Empty = no bigrams
         let data: Vec<u8> = vec![];
         let score = score_bigrams(&data);
         assert_eq!(score, 0);
@@ -884,21 +849,18 @@ mod tests {
 
     #[test]
     fn test_is_high_entropy_row_short() {
-        // Short rows should not be considered high entropy
         let row = vec![0u8; 100];
         assert!(!is_high_entropy_row(&row));
     }
 
     #[test]
     fn test_is_high_entropy_row_uniform() {
-        // Uniform data has many equal neighbors - not high entropy
         let row = vec![42u8; 2000];
         assert!(!is_high_entropy_row(&row));
     }
 
     #[test]
     fn test_is_high_entropy_row_gradient() {
-        // Gradient has constant delta - not high entropy
         let row: Vec<u8> = (0..2000).map(|i| (i % 256) as u8).collect();
         assert!(!is_high_entropy_row(&row));
     }

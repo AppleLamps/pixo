@@ -264,11 +264,8 @@ mod tests {
         let data = [0b10110100, 0b11001010];
         let mut reader = BitReader::new(&data);
 
-        // Read 4 bits: should get 0b0100 (LSB first from 0b10110100)
         assert_eq!(reader.read_bits(4).unwrap(), 0b0100);
-        // Read 4 more: should get 0b1011
         assert_eq!(reader.read_bits(4).unwrap(), 0b1011);
-        // Read 8 more: should get 0b11001010
         assert_eq!(reader.read_bits(8).unwrap(), 0b11001010);
     }
 
@@ -277,11 +274,9 @@ mod tests {
         let data = [0b10110100];
         let mut reader = BitReader::new(&data);
 
-        // Peek without consuming
         assert_eq!(reader.peek_bits(4).unwrap(), 0b0100);
-        assert_eq!(reader.peek_bits(4).unwrap(), 0b0100); // Same value
+        assert_eq!(reader.peek_bits(4).unwrap(), 0b0100);
 
-        // Now consume
         reader.consume(4);
         assert_eq!(reader.peek_bits(4).unwrap(), 0b1011);
     }
@@ -291,11 +286,8 @@ mod tests {
         let data = [0xFF, 0xAB];
         let mut reader = BitReader::new(&data);
 
-        // Read 3 bits
         reader.read_bits(3).unwrap();
-        // Align to byte
         reader.align_to_byte();
-        // Should now read second byte
         assert_eq!(reader.read_byte().unwrap(), 0xAB);
     }
 
@@ -304,11 +296,8 @@ mod tests {
         let data = [0xAB, 0xCD];
         let mut reader = BitReader::new(&data);
 
-        // Read 8 bits (aligned)
         reader.read_bits(8).unwrap();
-        // Align should do nothing
         reader.align_to_byte();
-        // Should read next byte
         assert_eq!(reader.read_byte().unwrap(), 0xCD);
     }
 
@@ -371,7 +360,6 @@ mod tests {
 
         assert_eq!(reader.remaining_bytes(), 4);
         reader.read_bits(16).unwrap();
-        // After reading 16 bits, 2 bytes consumed
         assert_eq!(reader.remaining_bytes(), 2);
     }
 
@@ -380,15 +368,12 @@ mod tests {
         let data = [0b10110100];
         let mut reader = MsbBitReader::new(&data);
 
-        // Read 4 bits MSB-first: should get 0b1011
         assert_eq!(reader.read_bits(4).unwrap(), 0b1011);
-        // Read 4 more: should get 0b0100
         assert_eq!(reader.read_bits(4).unwrap(), 0b0100);
     }
 
     #[test]
     fn test_msb_reader_byte_stuffing() {
-        // 0xFF followed by 0x00 should yield just 0xFF
         let data = [0xFF, 0x00, 0xAB];
         let mut reader = MsbBitReader::new(&data);
 
@@ -418,7 +403,6 @@ mod tests {
 
     #[test]
     fn test_msb_reader_has_more() {
-        // Use a non-0xFF byte to avoid byte stuffing complexity
         let data = [0xAB];
         let mut reader = MsbBitReader::new(&data);
 
@@ -454,63 +438,37 @@ mod tests {
         let data = [0b11110000, 0b00001111];
         let mut reader = MsbBitReader::new(&data);
 
-        // Read 6 bits from first byte
         assert_eq!(reader.read_bits(6).unwrap(), 0b111100);
-        // Read 6 bits crossing the byte boundary
         assert_eq!(reader.read_bits(6).unwrap(), 0b000000);
     }
 
     #[test]
     fn test_msb_reader_consume_zero_with_full_buffer() {
-        // Verify that consume(0) doesn't overflow when buffer has 32 bits.
-        // peek_bits(25) requires 4 bytes to fill buffer (32 bits total).
         let data = [0x12, 0x34, 0x56, 0x78, 0x9A];
         let mut reader = MsbBitReader::new(&data);
-        reader.peek_bits(25).unwrap(); // Forces buffer to have 32 bits
-        reader.consume(0); // Previously caused 1 << 32 overflow
-                           // Buffer should still have all 32 bits intact
+        reader.peek_bits(25).unwrap();
+        reader.consume(0);
         assert_eq!(reader.peek_bits(8).unwrap(), 0x12);
     }
 
     #[test]
     fn test_msb_reader_restart_marker_clears_bit_buffer() {
-        // Simulate JPEG restart marker scenario:
-        // - Read some bits (leaving residual bits in buffer)
-        // - Encounter restart marker (0xFF 0xD0)
-        // - Verify bit buffer is cleared and next byte is read fresh
-        //
-        // Data: 0xAB (partial read), 0xFF 0xD0 (RST0 marker), 0xCD (fresh data)
-        // Before fix: residual bits from 0xAB would corrupt reading of 0xCD
         let data = [0xAB, 0xFF, 0xD0, 0xCD];
         let mut reader = MsbBitReader::new(&data);
 
-        // Read 4 bits from first byte (0xAB = 0b10101011)
-        // This leaves 4 bits (0b1011) in the buffer
         assert_eq!(reader.read_bits(4).unwrap(), 0b1010);
 
-        // Now read 8 bits - this will:
-        // 1. Try to get more bits via ensure()
-        // 2. Call next_byte() which sees 0xFF 0xD0 (restart marker)
-        // 3. With the fix: clears bit buffer, returns 0xCD
-        // 4. Without fix: would have stale bits corrupting the result
         let next_byte = reader.read_bits(8).unwrap();
-
-        // After restart marker, bit buffer should be cleared and we get 0xCD fresh
         assert_eq!(next_byte, 0xCD);
     }
 
     #[test]
     fn test_msb_reader_restart_marker_mid_byte() {
-        // Test that restart marker properly resets even with full byte in buffer
-        // Data: 0x12, 0x34, 0xFF, 0xD1 (RST1), 0xAB
         let data = [0x12, 0x34, 0xFF, 0xD1, 0xAB];
         let mut reader = MsbBitReader::new(&data);
 
-        // Read 16 bits (consumes 0x12 and 0x34)
         assert_eq!(reader.read_bits(16).unwrap(), 0x1234);
 
-        // Next read will hit the restart marker
-        // Should get 0xAB with no residual bits
         assert_eq!(reader.read_bits(8).unwrap(), 0xAB);
     }
 }

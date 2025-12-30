@@ -769,13 +769,6 @@ mod tests {
 
     #[test]
     fn test_read_amplitude() {
-        // Test amplitude decoding
-        // Size 1: bits 0 = -1, bits 1 = 1
-        // Size 2: bits 0-1 = -3 to -2, bits 2-3 = 2-3
-        // etc.
-
-        // We can't easily test read_amplitude without a bit reader,
-        // so just verify the logic works with direct computation
         fn decode_amplitude(bits: i32, size: u8) -> i32 {
             let threshold = 1 << (size - 1);
             if bits < threshold {
@@ -816,7 +809,6 @@ mod tests {
 
     #[test]
     fn test_huffman_table_build() {
-        // Build a simple Huffman table
         let bits = [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let values = [0, 1];
 
@@ -826,47 +818,40 @@ mod tests {
 
     #[test]
     fn test_huffman_table_more_complex() {
-        // More complex table with different code lengths
         let bits = [0, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let values = [0, 1, 2];
 
         let table = HuffmanTable::build(&bits, &values);
         assert_eq!(table.values.len(), 3);
-        assert_eq!(table.max_code[2], 1); // Two 2-bit codes: 00, 01
-        assert_eq!(table.max_code[3], 4); // One 3-bit code: 100
+        assert_eq!(table.max_code[2], 1);
+        assert_eq!(table.max_code[3], 4);
     }
 
     #[test]
     fn test_huffman_table_lookup() {
-        // Build a simple table and verify it's properly constructed
         let bits = [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let values = [0, 1];
 
         let table = HuffmanTable::build(&bits, &values);
 
-        // Verify the table has the expected structure
         assert_eq!(table.values.len(), 2);
         assert_eq!(table.values[0], 0);
         assert_eq!(table.values[1], 1);
 
-        // Check that lookup table is populated (256 entries)
         assert_eq!(table.lookup.len(), 256);
     }
 
     #[test]
     fn test_find_entropy_end() {
-        // Data ending with EOI marker
         let data = [0x12, 0x34, 0xFF, 0xD9];
         assert_eq!(find_entropy_end(&data), 2);
 
-        // Data with byte stuffing
         let data = [0x12, 0xFF, 0x00, 0x34, 0xFF, 0xD9];
         assert_eq!(find_entropy_end(&data), 4);
     }
 
     #[test]
     fn test_find_entropy_end_restart_markers() {
-        // Restart markers should be skipped
         let data = [0x12, 0xFF, 0xD0, 0x34, 0xFF, 0xD9];
         assert_eq!(find_entropy_end(&data), 4);
     }
@@ -880,18 +865,16 @@ mod tests {
     #[test]
     fn test_find_entropy_end_no_marker() {
         let data = [0x12, 0x34, 0x56, 0x78];
-        assert_eq!(find_entropy_end(&data), 4); // Returns full length
+        assert_eq!(find_entropy_end(&data), 4);
     }
 
     #[test]
     fn test_find_entropy_end_empty() {
-        // Empty slice should not underflow
         assert_eq!(find_entropy_end(&[]), 0);
     }
 
     #[test]
     fn test_find_entropy_end_single_byte() {
-        // Single byte - need at least 2 for marker check
         assert_eq!(find_entropy_end(&[0xFF]), 1);
         assert_eq!(find_entropy_end(&[0x12]), 1);
     }
@@ -913,23 +896,10 @@ mod tests {
 
     #[test]
     fn test_jpeg_decode_zero_sampling_factor() {
-        // Craft a minimal JPEG with zero sampling factor in SOF0
-        // This should return an error, not panic with division by zero
         let mut jpeg = Vec::new();
 
-        // SOI marker
         jpeg.extend_from_slice(&[0xFF, 0xD8]);
 
-        // SOF0 marker with zero sampling factors
-        // FF C0 = SOF0 marker
-        // 00 0B = length (11 bytes including length field)
-        // 08 = 8-bit precision
-        // 00 08 = height (8)
-        // 00 08 = width (8)
-        // 01 = 1 component
-        // 01 = component ID
-        // 00 = sampling factors: h=0, v=0 (INVALID!)
-        // 00 = quantization table ID
         jpeg.extend_from_slice(&[
             0xFF, 0xC0, // SOF0 marker
             0x00, 0x0B, // length
@@ -938,11 +908,10 @@ mod tests {
             0x00, 0x08, // width
             0x01, // num components
             0x01, // component ID
-            0x00, // h_sampling=0, v_sampling=0 (both invalid!)
+            0x00, // h_sampling=0, v_sampling=0
             0x00, // quant table
         ]);
 
-        // EOI marker
         jpeg.extend_from_slice(&[0xFF, 0xD9]);
 
         let result = decode_jpeg(&jpeg);
@@ -956,7 +925,6 @@ mod tests {
 
     #[test]
     fn test_jpeg_encode_decode_roundtrip() {
-        // Create a simple image and encode it, then decode
         let pixels = vec![128u8; 8 * 8 * 3];
         let opts = crate::jpeg::JpegOptions::balanced(8, 8, 95);
         let encoded = crate::jpeg::encode(&pixels, &opts).expect("encode should work");
